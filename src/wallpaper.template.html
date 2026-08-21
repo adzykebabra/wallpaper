@@ -129,11 +129,29 @@ body.still #boot{display:none}
 #panel output{min-width:44px;text-align:right;color:#7fe3ff}
 #panel input[type=range]{flex:1;accent-color:#00b4ff;min-width:0}
 #panel input[type=checkbox]{accent-color:#00b4ff}
+#panel select{flex:1;min-width:0;font:inherit;color:#cfe9ff;background:#0a1e38;
+  border:1px solid rgba(0,170,255,.4);border-radius:6px;padding:3px 6px}
 #panel .row{display:flex;gap:8px;margin-top:12px}
 #panel button{flex:1;font:inherit;color:#cfe9ff;background:rgba(0,140,255,.16);cursor:pointer;
   border:1px solid rgba(0,170,255,.4);border-radius:6px;padding:6px 8px}
 #panel button:hover{background:rgba(0,140,255,.3)}
 #panel .hint{margin-top:10px;font-size:11px;opacity:.5;line-height:1.5}
+/* ── leaderboard (press L) ────────────────────────────────── */
+#board{position:fixed;left:16px;top:16px;z-index:9;width:300px;display:none;
+  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#cfe9ff;
+  background:rgba(6,14,28,.93);border:1px solid rgba(0,170,255,.35);border-radius:10px;
+  padding:14px 16px;backdrop-filter:blur(6px);box-shadow:0 12px 40px rgba(0,0,0,.6)}
+#board.on{display:block}
+#board h2{font:400 10px/1.6 'Press Start 2P',monospace;color:#5fd0ff;margin-bottom:10px;letter-spacing:1px}
+#board .hint{margin-top:10px;font-size:11px;opacity:.5;line-height:1.5}
+#board .row2{display:grid;grid-template-columns:1.4em 1fr 3.2em 3em;gap:8px;
+  align-items:center;padding:3px 0;white-space:nowrap}
+#board .row2 .nm{overflow:hidden;text-overflow:ellipsis}
+#board .bar{grid-column:2/5;height:3px;border-radius:2px;background:rgba(120,200,255,.14);
+  overflow:hidden;margin-bottom:3px}
+#board .bar i{display:block;height:100%;border-radius:2px}
+#board .empty{opacity:.55;padding:6px 0}
+
 #boot{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
   background:#020409;font:400 11px/1.6 'Press Start 2P',monospace;color:#3d7fa8;
   transition:opacity .45s ease}
@@ -147,6 +165,12 @@ body.still #boot{display:none}
 <canvas id="fx"></canvas>
 <div id="boot">BLUERYDGE ARENA</div>
 
+<div id="board">
+  <h2>ARENA STANDINGS</h2>
+  <div id="board-rows"></div>
+  <div class="hint">Wins level a fighter up. Level 3 evolves; level 6 is final form.</div>
+</div>
+
 <div id="panel">
   <h2>ARENA SETUP</h2>
   <label><span>Monitors</span><input id="p-screens" type="range" min="1" max="4" step="1"><output id="o-screens"></output></label>
@@ -154,11 +178,22 @@ body.still #boot{display:none}
   <label><span>Taskbar (px)</span><input id="p-taskbar" type="range" min="0" max="140" step="2"><output id="o-taskbar"></output></label>
   <label><span>Fighters</span><input id="p-count" type="range" min="1" max="16" step="1"><output id="o-count"></output></label>
   <label><span>Max FPS</span><input id="p-fps" type="range" min="15" max="60" step="5"><output id="o-fps"></output></label>
+  <label><span>Guests</span><select id="p-guests">
+    <option value="mix">Robots + creatures</option>
+    <option value="robohash">Robots only</option>
+    <option value="pokeapi">Creatures only</option>
+    <option value="endpoint">My endpoint</option>
+    <option value="off">Off (no network)</option>
+  </select></label>
   <label><span>Duels</span><input id="p-duels" type="checkbox"></label>
+  <label><span>Levels</span><input id="p-levels" type="checkbox"></label>
+  <label><span>Portal</span><input id="p-portal" type="checkbox"></label>
+  <label><span>Day cycle</span><input id="p-ambient" type="checkbox"></label>
   <label><span>Logo</span><input id="p-logo" type="checkbox"></label>
   <label><span>Scanlines</span><input id="p-grain" type="checkbox"></label>
   <div class="row"><button id="p-copy">Copy URL</button><button id="p-reset">Reset</button></div>
-  <div class="hint">H toggles this panel. Settings are saved locally and encoded in the URL.</div>
+  <div class="row"><button id="p-wipe">Reset progress</button></div>
+  <div class="hint">H settings &middot; L leaderboard. Saved locally; Copy URL bakes them in.</div>
 </div>
 
 <script>

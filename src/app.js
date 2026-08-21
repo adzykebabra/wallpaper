@@ -30,6 +30,7 @@ var DEFAULTS = {
   card: 0,        // 1 shows the full placemat card instead of the lockup
   portal: 1,      // guests arrive through the logo instead of walking on
   levels: 1,      // fighters gain experience, kit and evolutions from wins
+  ambient: 1,     // the scene drifts with the time of day
   seedxp: 0,      // preview switch: start every fighter with this much record
   grain: 1,
   maxDpr: 2,
@@ -894,8 +895,10 @@ function awardXP(actor, n) {
     sheets[actor.i] = spec.guest ? bakeGuestSheets(spec, bakedAt) : bakeSheets(spec, bakedAt);
   }
   saveXP();
+  renderBoard();
 
   var big = (now === 3 || now === MAX_LEVEL);
+  if (now === MAX_LEVEL) fireworks.push({ x: actor.x, col: spec.c3, t: 0, next: 0, n: 7 });
   levelups.push({
     x: actor.x, t: 0, col: spec.c3, big: big,
     text: now === MAX_LEVEL ? 'FINAL FORM' : (now === 3 ? 'EVOLVED' : 'LEVEL ' + now)
@@ -1074,17 +1077,44 @@ function hexPath(g, cx, cy, r) {
   g.closePath();
 }
 
+/* The scene keeps office hours: deepest at night, a violet cast at dawn and
+   dusk, a lift of blue through the day. Subtle on purpose — it is still the
+   brand navy — and repainted every ten minutes, not per frame. */
+var SKY_KEYS = [   // hour, four sky stops, bloom rgb, bloom strength
+  [3,  ['#01030a', '#020912', '#03101f', '#010409'], [4, 80, 200], 0.13],
+  [6,  ['#050411', '#0a0920', '#191033', '#030310'], [110, 70, 210], 0.17],
+  [12, ['#02060f', '#04101f', '#072138', '#020a14'], [10, 125, 230], 0.22],
+  [18, ['#030510', '#080b22', '#131038', '#03040f'], [90, 60, 200], 0.19],
+  [23, ['#01030a', '#020914', '#03101f', '#010409'], [4, 80, 200], 0.13]
+];
+
+function skyNow() {
+  if (!cfg.ambient) return SKY_KEYS[2];
+  var d = new Date(), h = d.getHours() + d.getMinutes() / 60;
+  var a = SKY_KEYS[0], b = SKY_KEYS[SKY_KEYS.length - 1];
+  for (var i = 0; i < SKY_KEYS.length - 1; i++) {
+    if (h >= SKY_KEYS[i][0] && h < SKY_KEYS[i + 1][0]) { a = SKY_KEYS[i]; b = SKY_KEYS[i + 1]; break; }
+  }
+  var t = a === b ? 0 : Math.max(0, Math.min(1, (h - a[0]) / (b[0] - a[0])));
+  if (h < SKY_KEYS[0][0]) { a = SKY_KEYS[SKY_KEYS.length - 1]; b = SKY_KEYS[0]; t = (h + 24 - a[0]) / (b[0] + 24 - a[0]); }
+  var stops = [];
+  for (var q = 0; q < 4; q++) stops.push(mix(a[1][q], b[1][q], t));
+  var br = [], j;
+  for (j = 0; j < 3; j++) br.push(Math.round(a[2][j] * (1 - t) + b[2][j] * t));
+  return [0, stops, br, a[3] * (1 - t) + b[3] * t];
+}
+
 function paintScene() {
   var W = V.W, H = V.H, G = V.groundY, U = V.U;
   sg.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
   sg.clearRect(0, 0, W, H);
 
-  /* Base: the placemat's near-black navy, lifting slightly toward the floor */
+  var tone = skyNow();
   var sky = sg.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, '#01040a');
-  sky.addColorStop(0.42, '#030c18');
-  sky.addColorStop(0.80, '#05172c');
-  sky.addColorStop(1, '#01060e');
+  sky.addColorStop(0, tone[1][0]);
+  sky.addColorStop(0.42, tone[1][1]);
+  sky.addColorStop(0.80, tone[1][2]);
+  sky.addColorStop(1, tone[1][3]);
   sg.fillStyle = sky; sg.fillRect(0, 0, W, H);
 
   /* One bloom per monitor, so each screen is composed around its own mark */
@@ -1092,8 +1122,9 @@ function paintScene() {
     var cx = (p + 0.5) * V.panelW - V.OFF;
     if (cx < -V.panelW || cx > W + V.panelW) continue;
     var bl = sg.createRadialGradient(cx, H * 0.46, 0, cx, H * 0.46, V.panelW * 0.6);
-    bl.addColorStop(0, 'rgba(10,120,225,0.20)');
-    bl.addColorStop(0.45, 'rgba(8,80,180,0.09)');
+    var bc = tone[2].join(',');
+    bl.addColorStop(0, 'rgba(' + bc + ',' + tone[3].toFixed(3) + ')');
+    bl.addColorStop(0.45, 'rgba(' + bc + ',' + (tone[3] * 0.42).toFixed(3) + ')');
     bl.addColorStop(1, 'rgba(0,0,0,0)');
     sg.fillStyle = bl; sg.fillRect(cx - V.panelW * 0.7, 0, V.panelW * 1.4, H);
   }
@@ -1417,7 +1448,7 @@ function flareMark(m, on) {
 /* ---------------------------------------------------------------- sim --- */
 
 var actors = [], projs = [], parts = [], duels = [], graves = [], portals = [];
-var levelups = [], shocks = [];
+var levelups = [], shocks = [], fireworks = [];
 var tally = { duel: 0, wrestle: 0, piggyback: 0, gang: 0, social: 0, ultimate: 0, deaths: 0 };
 
 var GRAVE_LIFE = 30;     // seconds a marker stands before it fades
@@ -1720,6 +1751,7 @@ function endDuel(d, noKill) {
   var k = duels.indexOf(d); if (k >= 0) duels.splice(k, 1);
   if (noKill) return;
   awardXP(winner, 1 + Math.floor((loser.s.lvl || 0) / 2));
+  winner.victory = 1.1;
 
   /* the loser goes down: knocked back, topples, then leaves a marker */
   loser.st = 'down';
@@ -1779,9 +1811,23 @@ function stepSim(dt) {
     }
 
     if (a.st === 'run') {
+      if (a.victory > 0) {                    // a beat to enjoy the win
+        a.victory -= dt;
+        a.phase = (a.phase + dt * 1.4) % 1;
+        if (a.victory > 0.5 && RNG() < dt * 9 && parts.length < 240) {
+          parts.push({ x: a.x + rnd(-8, 8) * V.S, y: V.groundY - rnd(4, FEET) * V.S,
+                       vx: rnd(-25, 25), vy: rnd(-70, -20),
+                       life: 0.5, max: 0.5, c: a.s.c3, sz: 1 });
+        }
+      } else if (a.rest > 0) {                // stopped for a breather
+        a.rest -= dt;
+        a.phase = (a.phase + dt * 0.55) % 1;
+      } else {
+        if (RNG() < dt * 0.028 && a.cool > 3 && !a.pass) a.rest = rnd(1.6, 3.4);
       var dx = a.dir * a.speed * dt * (a.hurt > 0 ? 0.55 : 1);
       a.x += dx;
       a.phase = (a.phase + Math.abs(dx) / (ANIM_CYCLE_ART * V.S)) % 1;
+      }
       if (s.ranged && a.cool <= 0 && projs.length < 14 && RNG() < dt * 0.5) {
         var ahead = false;
         for (var q = 0; q < actors.length; q++) {
@@ -1912,6 +1958,7 @@ function stepSim(dt) {
         thrown.knock = -thrown.face * 150;
         burst(thrown.x, V.groundY - FEET * V.S * 0.5, 20, [thrown.s.c3, '#ffffff'], 1.2);
         awardXP(holder, 1);                     // the throw itself is the win
+        holder.victory = 1.1;
         if (RNG() < 0.62) {                     // and it is often the end of it
           thrown.st = 'down'; thrown.fall = 0; thrown.hurt = 1; thrown.flash = 0.14;
         } else {
@@ -1951,6 +1998,7 @@ function stepSim(dt) {
             vic.knock = (vic.x < d.b.x ? -1 : 1) * 190;
           }
           awardXP(d.b, 2);
+          d.b.victory = 1.4;
         }
         continue;
       }
@@ -1967,6 +2015,7 @@ function stepSim(dt) {
         mark.vy = -210; mark.y = -0.01; mark.knock = -mark.face * 60;
         burst(mark.x, V.groundY - FEET * V.S * 0.5, 22, [mark.s.c3, '#ffffff'], 1.2);
         awardXP(w1, 1); if (w2) awardXP(w2, 1);
+        w1.victory = 1.1; if (w2) w2.victory = 1.1;
       }
       continue;
     }
@@ -1999,6 +2048,21 @@ function stepSim(dt) {
       }
     }
     if (gone) projs.splice(p, 1);
+  }
+
+  /* fireworks: a short volley over the new champion */
+  for (var fw = fireworks.length - 1; fw >= 0; fw--) {
+    var F = fireworks[fw];
+    F.t += dt;
+    if (F.t >= F.next && F.n > 0) {
+      F.n--;
+      F.next = F.t + 0.22 + RNG() * 0.2;
+      var span2 = V.groundY - V.stripTop;
+      burst(F.x + rnd(-130, 130) * V.S * 0.4,
+            V.stripTop + rnd(0.15, 0.6) * span2,
+            22, [F.col, '#ffffff', '#ffd28a', '#9fe0ff'], 1.15);
+    }
+    if (F.n <= 0) fireworks.splice(fw, 1);
   }
 
   /* shockwaves */
@@ -2047,6 +2111,7 @@ function composeStill(seed) {
   try {
     actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0;
     graves.length = 0; portals.length = 0; levelups.length = 0; shocks.length = 0;
+    fireworks.length = 0;
 
     var n = Math.max(2, cfg.count);
     var slot = V.VW / n;
@@ -2093,6 +2158,8 @@ function frameIndex(a) {
   if (a.st === 'down') return F_HIT;
   if (a.hurt > 0.12 && a.st !== 'duel') return F_HIT;
   if (a.atkT > 0) return F_ATK + Math.min(3, Math.floor((0.36 - a.atkT) / 0.09));
+  if (a.victory > 0) return (a.victory * 5 | 0) % 2 ? F_ATK + 1 : F_IDLE + (Math.floor(a.phase * 4) % 4);
+  if (a.rest > 0) return F_IDLE + (Math.floor(a.phase * 4) % 4);
   if (a.st === 'wrestle') return F_ATK + (Math.floor(a.phase * 4) % 2);
   if (a.st === 'ride' || a.st === 'mounting') return F_IDLE + (Math.floor(a.phase * 4) % 4);
   if (a.st === 'carry') return F_RUN + (Math.floor(a.phase * 8) % 8);
@@ -2845,6 +2912,10 @@ function seed() {
   dismissBoot();
 }
 
+setInterval(function () {
+  if (!document.hidden && !cfg.still && cfg.ambient && running) paintScene();
+}, 600000);
+
 window.addEventListener('resize', function () {
   clearTimeout(relayoutT);
   relayoutT = setTimeout(function () { relayout(false); }, 180);
@@ -2874,13 +2945,45 @@ if (document.fonts && document.fonts.load) {
   boot();
 }
 
+/* --------------------------------------------------------- leaderboard -- */
+
+function renderBoard() {
+  var board = document.getElementById('board');
+  if (!board || !board.classList.contains('on')) return;
+  var rows = document.getElementById('board-rows');
+  var ranked = [];
+  for (var i = 0; i < ROSTER.length; i++) if (ROSTER[i].xp) ranked.push(ROSTER[i]);
+  ranked.sort(function (a, b) { return (b.xp - a.xp) || ((b.lvl || 0) - (a.lvl || 0)); });
+  ranked = ranked.slice(0, 8);
+
+  if (!ranked.length) {
+    rows.innerHTML = '<div class="empty">No wins yet — the first duel is coming.</div>';
+    return;
+  }
+  var html = '';
+  for (var r = 0; r < ranked.length; r++) {
+    var sp = ranked[r], lvl = sp.lvl || 0;
+    var floor = LEVEL_XP[lvl] || 0;
+    var ceil = lvl >= MAX_LEVEL ? floor : LEVEL_XP[lvl + 1];
+    var frac = lvl >= MAX_LEVEL ? 1 : Math.min(1, (sp.xp - floor) / Math.max(1, ceil - floor));
+    var tag = lvl >= MAX_LEVEL ? 'FINAL' : 'L' + lvl;
+    /* every value below is produced by this file, never by a manifest —
+       names were reduced to plain ASCII long before they got here */
+    html += '<div class="row2"><span>' + (r + 1) + '</span>' +
+      '<span class="nm" style="color:' + sp.c3 + '">' + sp.name + '</span>' +
+      '<span>' + tag + '</span><span>' + sp.xp + ' xp</span></div>' +
+      '<div class="bar"><i style="width:' + Math.round(frac * 100) + '%;background:' + sp.c3 + '"></i></div>';
+  }
+  rows.innerHTML = html;
+}
+
 /* --------------------------------------------------------------- panel -- */
 
 (function panelUI() {
   var el = document.getElementById('panel');
   if (!el) return;
   var fields = ['screens', 'scale', 'taskbar', 'count', 'fps'];
-  var flags = ['duels', 'logo', 'grain'];
+  var flags = ['duels', 'levels', 'portal', 'ambient', 'logo', 'grain'];
 
   function sync() {
     fields.forEach(function (k) {
@@ -2889,6 +2992,7 @@ if (document.fonts && document.fonts.load) {
       out.textContent = cfg[k];
     });
     flags.forEach(function (k) { document.getElementById('p-' + k).checked = !!cfg[k]; });
+    if (sel) sel.value = cfg.guests;
   }
 
   fields.forEach(function (k) {
@@ -2906,6 +3010,33 @@ if (document.fonts && document.fonts.load) {
     });
   });
 
+  var sel = document.getElementById('p-guests');
+  if (sel) {
+    sel.addEventListener('change', function () {
+      cfg.guests = this.value;
+      saveCfg();
+      pollGuests();                     // new source takes effect immediately
+    });
+  }
+
+  var wipe = document.getElementById('p-wipe');
+  if (wipe) {
+    wipe.addEventListener('click', function () {
+      try { localStorage.removeItem(XP_STORE); } catch (e) {}
+      for (var i = 0; i < ROSTER.length; i++) {
+        var sp = ROSTER[i];
+        if (!sp.xp && !sp.lvl) continue;
+        sp.xp = 0; sp.lvl = 0; applyProgression(sp);
+        if (bakedAt) sheets[i] = sp.guest ? bakeGuestSheets(sp, bakedAt) : bakeSheets(sp, bakedAt);
+      }
+      levelups.length = 0; fireworks.length = 0;
+      renderBoard();
+      var btn = this;
+      btn.textContent = 'Progress cleared';
+      setTimeout(function () { btn.textContent = 'Reset progress'; }, 1400);
+    });
+  }
+
   document.getElementById('p-copy').addEventListener('click', function () {
     var q = [];
     for (var k in DEFAULTS) if (cfg[k] !== DEFAULTS[k]) q.push(k + '=' + cfg[k]);
@@ -2921,9 +3052,11 @@ if (document.fonts && document.fonts.load) {
     saveCfg(); sync(); relayout(true);
   });
 
+  var board = document.getElementById('board');
   window.addEventListener('keydown', function (e) {
     if (e.key === 'h' || e.key === 'H') { el.classList.toggle('on'); sync(); }
-    if (e.key === 'Escape') el.classList.remove('on');
+    if (e.key === 'l' || e.key === 'L') { board.classList.toggle('on'); renderBoard(); }
+    if (e.key === 'Escape') { el.classList.remove('on'); board.classList.remove('on'); }
   });
 
   /* hide the pointer when nothing is happening — it is a wallpaper */

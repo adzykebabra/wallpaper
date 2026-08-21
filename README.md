@@ -173,6 +173,13 @@ come and go like everyone else.
 Use `?seedxp=14` to see the final forms straight away, or `?levels=0` to turn
 the whole system off.
 
+## Small life
+
+Winners take a beat to enjoy it — a little flourish and a spray of sparks
+before they run on. Reaching final form earns a firework volley over the new
+champion. And once in a while a fighter simply stops for a breather, looks
+around, and carries on; the parade reads as alive rather than mechanical.
+
 ## Fallen fighters
 
 Losing a duel is fatal. The loser is knocked back, topples, fades, and a
@@ -307,9 +314,15 @@ Test it without deploying anything:
 ## Settings
 
 Press **H** over the wallpaper for the settings panel — monitors, fighter
-size, taskbar height, crowd, frame cap, and toggles for duels, logo and
-scanlines. Changes save to `localStorage`, and **Copy URL** gives you a link
-with the same settings baked in, which is what a wallpaper engine wants.
+size, taskbar height, crowd, frame cap, the guest source, and toggles for
+duels, levels, the portal, the day cycle, logo and scanlines, plus a
+**Reset progress** button that clears every fighter's record. Changes save to
+`localStorage`, and **Copy URL** gives you a link with the same settings
+baked in, which is what a wallpaper engine wants.
+
+Press **L** for the arena standings — the top eight fighters by experience,
+each with their level, a progress bar to the next one, and FINAL for a
+champion. It updates live while wins come in.
 
 Every setting is also a URL parameter:
 
@@ -329,6 +342,7 @@ Every setting is also a URL parameter:
 | `logo`     | `1`     | Set `0` to hide the wordmarks |
 | `logoy`    | `0`     | Logo height as a fraction of the screen; `0` = automatic |
 | `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |
+| `ambient`  | `1`     | The scene keeps office hours — deepest at night, violet at dawn and dusk, a lift of blue through the day. Repainted every ten minutes, not per frame |
 | `grain`    | `1`     | Scanline overlay |
 | `guests`   | `mix`   | Guest source: `mix`, `robohash`, `pokeapi`, `endpoint`, or `off` |
 | `card`     | `0`     | `1` shows the full placemat card instead of the lockup |
