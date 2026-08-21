@@ -116,6 +116,48 @@ front. Delete the file and rebuild to go back to the drawn version.
 **Prefer `.svg` for the logo.** A vector lockup stays sharp from a 1080p
 laptop to a 4K panel; a small PNG will be upscaled and go soft.
 
+## Encounters
+
+Meeting head-on does not always mean a fight:
+
+| | |
+|---|---|
+| **Duel** | trade blows; the loser goes down |
+| **Wrestle** | lock up, shove, and one gets thrown — fatal about two times in three |
+| **Piggyback** | one climbs on the other and they travel together for a while, then part |
+| **Gang-up** | if a third is running with one of them, two take on one |
+| **Ultimate** | the outnumbered one can turn it around — a charge, a shockwave, and both attackers go down at once. More likely the higher their level |
+
+A grappler always prefers to wrestle. Everyone in a scrap is labelled while it
+lasts, on a backing chip so the name stays readable over any background.
+
+## Progression
+
+A win is experience, experience is levels, and every level bolts something new
+onto the fighter. Progress is per character, not per appearance, so a fighter
+carries their record across the session and through a reload.
+
+| Level | Wins | Gains |
+|-------|------|-------|
+| 1 | 1 | a cape |
+| 2 | 2 | a better weapon |
+| 3 | 4 | **evolution** — wings, brighter palette, larger |
+| 4 | 7 | shoulder plates, a shield, a longer cape |
+| 5 | 10 | bulk, larger again |
+| 6 | 14 | **final form** — royal crown, full cape, scythe, aura |
+
+Beating someone above you is worth more than beating someone below, and a
+fighter with a record is drafted more often, so a run builds instead of being
+spread thin across the cast.
+
+**A final form holds the field.** It stops leaving at the edges and patrols
+instead, and nobody picks a fight with it — they either give it a wide berth
+or fall in alongside it. At most two champions camp at once; beyond that they
+come and go like everyone else.
+
+Use `?seedxp=14` to see the final forms straight away, or `?levels=0` to turn
+the whole system off.
+
 ## Fallen fighters
 
 Losing a duel is fatal. The loser is knocked back, topples, fades, and a
@@ -256,7 +298,10 @@ Every setting is also a URL parameter:
 | `scale`    | `2`     | Sprite pixel scale. Fighters are `28 × scale` px tall, so `2` ≈ 56 px |
 | `taskbar`  | `48`    | Height of your taskbar in px — the fighters run on this line |
 | `fps`      | `60`    | Frame cap. Drop to `30` on a laptop |
-| `duels`    | `1`     | Set `0` for a plain parade — nobody duels, nobody dies |
+| `duels`    | `1`     | Set `0` for a plain parade — no encounters, nobody dies |
+| `levels`   | `1`     | Experience, kit and evolutions. `0` freezes everyone at base |
+| `seedxp`   | `0`     | Preview switch: start every fighter with this much record (`14` = final form) |
+| `portal`   | `1`     | Challengers and guests arrive through the mark. `0` = walk on |
 | `logo`     | `1`     | Set `0` to hide the wordmarks |
 | `logoy`    | `0`     | Logo height as a fraction of the screen; `0` = automatic |
 | `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |
@@ -271,9 +316,18 @@ bar ≈ 0) so the fighters land exactly on its top edge.
 
 ## Roster
 
+**The core sixteen**, who walk on from the edges:
 RONIN-9 · VECTOR-X · SIR AEGIS · LUPUS · URSOK · MALPHAX · NOVA-7 ·
 KESTREL · IRONCLAD · SERAPH · VIPER · GLACIA · EMBER · RAVEN · ZEPHYR ·
 OBSIDIAN
+
+**Eight challengers**, who arrive through the mark:
+KENSHO · LOTUS · TITANOV · RAZORCLAW · TEMPESTA · VISOR · FERRO · NIGHTSTEP
+
+The challengers are built on well-worn archetypes — the gi martial artist, the
+grappler, the clawed feral, the optic-beam ranger, the storm-caller. Archetypes
+are not ownable; specific characters are. None of these is a likeness of
+anyone's character, and none uses anyone else's artwork.
 
 Humanoids, two beasts and a hover drone, each with its own silhouette,
 palette, weapon and gait, drawn as pixel art rather than glowing vectors so

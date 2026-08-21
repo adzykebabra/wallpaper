@@ -29,6 +29,8 @@ var DEFAULTS = {
   logo: 1,
   card: 0,        // 1 shows the full placemat card instead of the lockup
   portal: 1,      // guests arrive through the logo instead of walking on
+  levels: 1,      // fighters gain experience, kit and evolutions from wins
+  seedxp: 0,      // preview switch: start every fighter with this much record
   grain: 1,
   maxDpr: 2,
   guests: 'endpoint',   // 'endpoint' | 'robohash' | 'pokeapi' | 'off'
@@ -37,10 +39,10 @@ var DEFAULTS = {
   drift: 0        // slowly drift the logo — OLED burn-in insurance
 };
 var NUM = { screens: 1, panel: 1, scale: 1, taskbar: 1, count: 1, fps: 1,
-            maxDpr: 1, still: 1, logoy: 1 };
+            maxDpr: 1, still: 1, logoy: 1, seedxp: 1 };
 var LIMITS = {
   screens: [1, 6], panel: [-1, 5], scale: [1, 5], taskbar: [0, 400],
-  count: [1, 16], fps: [10, 144], maxDpr: [1, 3],
+  count: [1, 16], fps: [10, 144], maxDpr: [1, 3], seedxp: [0, 400],
   still: [0, 999999], logoy: [0, 0.95]
 };
 
@@ -90,6 +92,7 @@ function clampCfg(c) {
   c.panel = Math.round(c.panel);
   c.still = Math.round(c.still);
   c.count = Math.round(c.count);
+  c.seedxp = Math.round(c.seedxp);
   if (c.panel >= c.screens) c.panel = -1;
   c.guests = String(c.guests);
   if (c.guests === '1' || c.guests === 'true') c.guests = 'endpoint';
@@ -190,7 +193,7 @@ function dot(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
    empty means the wallpaper never touches the network. See README. */
 var GUEST_ENDPOINT = '__GUEST_ENDPOINT__';
 
-var GUEST_MAX = 24;          // hard ceiling on drafted guests per session
+var GUEST_MAX = 40;          // hard ceiling on drafted guests per session
 var GUEST_REFRESH = 1800;    // seconds between manifest polls
 var GUEST_CACHE = 'bluerydge.arena.guests';
 var GUEST_MAX_W = 42;        // art px; the cell is ART_W wide, leave a margin
@@ -227,7 +230,29 @@ var ROSTER = [
   { id:'zephyr', name:'ZEPHYR',    kind:'humanoid', c1:'#3585c2', c2:'#07223a', c3:'#5fd0ff', c4:'#e8fbff',
     head:'visor',  wep:'blade',  ranged:0, spd:1.32 },
   { id:'obsidian',name:'OBSIDIAN', kind:'humanoid', c1:'#6a5a90', c2:'#1a1230', c3:'#8a5cff', c4:'#cdb6ff',
-    head:'skull',  wep:'hammer', ranged:0, spd:0.72, heavy:1, bulk:1 }
+    head:'skull',  wep:'hammer', ranged:0, spd:0.72, heavy:1, bulk:1 },
+
+  /* ── challengers ──────────────────────────────────────────────────────
+     Original characters built on well-worn archetypes — the gi martial
+     artist, the grappler, the clawed feral, the optic-beam ranger, the
+     storm-caller. Archetypes are not ownable; specific characters are, so
+     none of these is a likeness of anyone's. They arrive by portal.       */
+  { id:'kensho', name:'KENSHO',    kind:'humanoid', c1:'#d8dbe2', c2:'#3b4048', c3:'#ff7a3d', c4:'#ffe1c2',
+    head:'mask',   wep:'fist',   ranged:1, spd:1.05, challenger:1 },
+  { id:'lotus',  name:'LOTUS',     kind:'humanoid', c1:'#2f7fd0', c2:'#0b2748', c3:'#7fd4ff', c4:'#e9f8ff',
+    head:'visor',  wep:'fist',   ranged:0, spd:1.38, challenger:1 },
+  { id:'titanov',name:'TITANOV',   kind:'humanoid', c1:'#b05a3a', c2:'#3b1a10', c3:'#ffb37a', c4:'#ffe3cc',
+    head:'mask',   wep:'fist',   ranged:0, spd:0.68, heavy:1, bulk:1, grappler:1, challenger:1 },
+  { id:'razorclaw',name:'RAZORCLAW',kind:'humanoid',c1:'#c8a83c', c2:'#3a2e08', c3:'#ffe066', c4:'#fff6cc',
+    head:'mask',   wep:'claw',   ranged:0, spd:1.30, challenger:1 },
+  { id:'tempesta',name:'TEMPESTA', kind:'humanoid', c1:'#cfd6e6', c2:'#39415a', c3:'#9fe8ff', c4:'#ffffff',
+    head:'crown',  wep:'staff',  cape:1, ranged:1, spd:0.96, challenger:1 },
+  { id:'visor',  name:'VISOR',     kind:'humanoid', c1:'#2f5fa8', c2:'#0d1f3d', c3:'#ff4d4d', c4:'#ffd6d6',
+    head:'visor',  wep:'gun',    ranged:1, spd:1.02, challenger:1 },
+  { id:'ferro',  name:'FERRO',     kind:'hover',    c1:'#8e2f6f', c2:'#2a0c22', c3:'#ff7fd8', c4:'#ffe3f6',
+    head:'dome',   wep:'cannon', ranged:1, spd:0.9, challenger:1 },
+  { id:'nightstep',name:'NIGHTSTEP',kind:'humanoid',c1:'#3a2a6e', c2:'#120a26', c3:'#7d5cff', c4:'#d8ccff',
+    head:'hood',   wep:'dagger', cape:1, ranged:0, spd:1.42, challenger:1 }
 ];
 
 /* --------------------------------------------------------- pose engine -- */
@@ -350,6 +375,18 @@ function drawHead(g, s, hx, hy) {
     dot(g, x + 4, y - 6, 1, 1, c4);
     dot(g, x + 1, y + 3, 8, 2, c4); dot(g, x + 5, y + 3, 3, 2, c3);
     dot(g, x - 1, y + 1, 1, 5, c3); dot(g, x + 8, y + 1, 1, 5, c3);
+  } else if (s.head === 'royal') {
+    dot(g, x - 1, y - 3, 10, 3, c3);                     // band
+    dot(g, x - 1, y - 4, 10, 1, mix(c3, '#ffffff', 0.5));
+    var pts = [[-1, 5], [1, 7], [3, 9], [5, 7], [7, 5]];
+    for (var pi = 0; pi < pts.length; pi++) {
+      dot(g, x + pts[pi][0], y - 3 - pts[pi][1], 2, pts[pi][1], c3);
+      dot(g, x + pts[pi][0], y - 4 - pts[pi][1], 2, 2, mix(c3, '#ffffff', 0.65));
+    }
+    dot(g, x + 3, y - 15, 2, 2, '#ffffff');              // centre gem
+    dot(g, x + 1, y + 3, 8, 2, c4);
+    dot(g, x + 5, y + 3, 3, 2, c3);
+    dot(g, x - 1, y + 1, 1, 6, c3); dot(g, x + 8, y + 1, 1, 6, c3);
   } else if (s.head === 'skull') {
     dot(g, x + 1, y + 2, 3, 3, '#05030a'); dot(g, x + 5, y + 2, 3, 3, '#05030a');
     dot(g, x + 5, y + 3, 2, 2, c3); dot(g, x + 2, y + 3, 2, 2, rgba(c3, 0.75));
@@ -426,15 +463,22 @@ function drawWeapon(g, s, hx, hy, k) {
 }
 
 function drawCape(g, s, sx, sy, wave) {
-  var c = mix(s.c2, s.c1, 0.35), e = rgba(s.c3, 0.55);
-  var x1 = sx - 3, y1 = sy + 7;
-  var x2 = sx - 6 - wave * 0.7, y2 = sy + 13 - wave * 0.5;
-  var x3 = sx - 9 - wave, y3 = sy + 16 - wave;
-  pline(g, sx + 1, sy - 1, x1, y1, 5, c);
-  pline(g, x1, y1, x2, y2, 4, c);
-  pline(g, x2, y2, x3, y3, 3, c);
+  var big = s.capeBig || 0;                        // rank makes it flow further
+  var c = mix(s.c2, s.c1, 0.35 + big * 0.12), e = rgba(s.c3, 0.55);
+  var reach = 1 + big * 0.55, w0 = 5 + big;
+  var x1 = sx - 3 * reach, y1 = sy + 7;
+  var x2 = sx - (6 + wave * 0.7) * reach, y2 = sy + 13 - wave * 0.5;
+  var x3 = sx - (9 + wave) * reach, y3 = sy + (16 + big * 3) - wave;
+  pline(g, sx + 1, sy - 1, x1, y1, w0, c);
+  pline(g, x1, y1, x2, y2, w0 - 1, c);
+  pline(g, x2, y2, x3, y3, Math.max(2, w0 - 2), c);
   pline(g, x2 + 1, y2 + 1, x3 + 1, y3 + 1, 1, e);
+  if (big) {                                       // a second, trailing fold
+    pline(g, x1, y1 + 2, x3 - 2, y3 - 3, Math.max(2, w0 - 3), mix(c, '#000000', 0.25));
+    pline(g, x2, y2 + 2, x3 - 3, y3 + 1, 1, e);
+  }
   dot(g, sx - 1, sy - 2, 4, 2, s.c3);              // clasp
+  if (big > 1) dot(g, sx - 2, sy - 3, 6, 1, mix(s.c3, '#ffffff', 0.5));
 }
 
 function drawWings(g, s, sx, sy, flap, kind) {
@@ -638,6 +682,9 @@ function bakeCell(s, i, K) {
     hg.setTransform(K, 0, 0, K, 0, 0);
     var flood = {}; for (var k in s) flood[k] = s[k];
     flood.c1 = flood.c2 = flood.c4 = s.c3;
+    if (s.grow && s.grow !== 1) {
+      hg.translate(MIDX, FEET); hg.scale(s.grow, s.grow); hg.translate(-MIDX, -FEET);
+    }
     drawBody(hg, flood, P);
     g.save();
     g.filter = 'blur(' + (1.1 * K).toFixed(2) + 'px)';
@@ -647,6 +694,9 @@ function bakeCell(s, i, K) {
   }
 
   g.setTransform(K, 0, 0, K, 0, 0);
+  if (s.grow && s.grow !== 1) {
+    g.translate(MIDX, FEET); g.scale(s.grow, s.grow); g.translate(-MIDX, -FEET);
+  }
   drawBody(g, s, P);
   g.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -737,6 +787,125 @@ function glowBlob(color) {
   return (blobCache[color] = c);
 }
 
+/* --------------------------------------------------------- progression --
+   A win is experience. Experience is levels. Each level bolts something new
+   onto the fighter — a cape, a better weapon, wings — and levels 3 and 6 are
+   full evolutions. Progress is per character, not per appearance, so RONIN-9
+   carries his record across the whole session and survives a reload.
+
+   The trick that makes this cheap: the drawn fighters are already described
+   by a spec (cape, wings, weapon, headgear, bulk), so "gains wings" is one
+   field and a re-bake of that character's eighteen cells — about 10ms.     */
+
+var LEVEL_XP = [0, 1, 2, 4, 7, 10, 14];       // wins needed for levels 0..6
+var MAX_LEVEL = 6;
+var XP_STORE = 'bluerydge.arena.xp';
+
+function levelFor(xp) {
+  var l = 0;
+  for (var i = 1; i < LEVEL_XP.length; i++) if (xp >= LEVEL_XP[i]) l = i;
+  return l;
+}
+
+var WEAPON_UP = {
+  blade: 'sword', dagger: 'blade', gun: 'cannon', fist: 'hammer',
+  claw: 'scythe', bow: 'staff', sword: 'sword', hammer: 'hammer',
+  staff: 'staff', scythe: 'scythe', cannon: 'cannon'
+};
+
+function snapshotBase(spec) {
+  if (spec.base) return;
+  spec.base = {
+    c1: spec.c1, c3: spec.c3, wep: spec.wep, head: spec.head,
+    cape: spec.cape, wings: spec.wings, heavy: spec.heavy,
+    bulk: spec.bulk, shield: spec.shield, grow: 1
+  };
+}
+
+/* Rebuild the spec from its base plus everything the level has earned. */
+function applyProgression(spec) {
+  snapshotBase(spec);
+  var b = spec.base, L = spec.lvl || 0;
+  spec.c1 = b.c1; spec.c3 = b.c3; spec.wep = b.wep; spec.head = b.head;
+  spec.cape = b.cape; spec.wings = b.wings; spec.heavy = b.heavy;
+  spec.bulk = b.bulk; spec.shield = b.shield; spec.grow = 1; spec.aura = 0;
+  spec.capeBig = 0;
+
+  if (L >= 1) spec.cape = 1;                              // a cape for the first win
+  if (L >= 2) spec.wep = WEAPON_UP[b.wep] || b.wep;       // better weapon
+  if (L >= 3) {                                           // EVOLUTION
+    spec.wings = b.wings || (/demon|ember|malphax|obsidian|raven/.test(spec.id) ? 'bat' : 'feather');
+    spec.c1 = mix(b.c1, '#ffffff', 0.18);
+    spec.c3 = mix(b.c3, '#ffffff', 0.15);
+    spec.grow = 1.08;
+  }
+  if (L >= 4) { spec.heavy = 1; spec.shield = 1; spec.capeBig = 1; }
+  if (L >= 5) { spec.bulk = 1; spec.grow = 1.14; }
+  if (L >= MAX_LEVEL) {                                   // FINAL FORM
+    spec.head = 'royal';
+    spec.capeBig = 2;
+    spec.wep = 'scythe';
+    spec.c1 = mix(b.c1, '#ffffff', 0.30);
+    spec.c3 = mix(b.c3, '#ffffff', 0.28);
+    spec.grow = 1.22;
+    spec.aura = 1;
+  }
+}
+
+function loadXP() {
+  if (cfg.seedxp > 0) {                    // preview: everyone starts with a record
+    for (var q = 0; q < ROSTER.length; q++) {
+      var sq = ROSTER[q];
+      sq.xp = cfg.seedxp; sq.lvl = levelFor(sq.xp); applyProgression(sq);
+    }
+    return;
+  }
+  try {
+    var raw = JSON.parse(localStorage.getItem(XP_STORE) || '{}');
+    for (var i = 0; i < ROSTER.length; i++) {
+      var sp = ROSTER[i], v = raw[sp.id];
+      if (typeof v === 'number' && v >= 0 && v < 100000) {
+        sp.xp = v; sp.lvl = levelFor(v); applyProgression(sp);
+      }
+    }
+  } catch (e) {}
+}
+
+function saveXP() {
+  try {
+    var out = {};
+    for (var i = 0; i < ROSTER.length; i++) if (ROSTER[i].xp) out[ROSTER[i].id] = ROSTER[i].xp;
+    localStorage.setItem(XP_STORE, JSON.stringify(out));
+  } catch (e) {}
+}
+
+/* Award a win. Returns the new level if the fighter went up, else 0. */
+function awardXP(actor, n) {
+  var spec = actor.s;
+  if (!cfg.levels) return 0;
+  spec.xp = (spec.xp || 0) + (n || 1);
+  var was = spec.lvl || 0, now = levelFor(spec.xp);
+  if (now === was) { saveXP(); return 0; }
+
+  spec.lvl = now;
+  applyProgression(spec);
+  if (bakedAt) {
+    sheets[actor.i] = spec.guest ? bakeGuestSheets(spec, bakedAt) : bakeSheets(spec, bakedAt);
+  }
+  saveXP();
+
+  var big = (now === 3 || now === MAX_LEVEL);
+  levelups.push({
+    x: actor.x, t: 0, col: spec.c3, big: big,
+    text: now === MAX_LEVEL ? 'FINAL FORM' : (now === 3 ? 'EVOLVED' : 'LEVEL ' + now)
+  });
+  burst(actor.x, V.groundY - FEET * V.S * 0.5, big ? 34 : 16,
+        [spec.c3, '#ffffff', spec.c1], big ? 1.5 : 0.9);
+  return now;
+}
+
+function isFinal(spec) { return (spec.lvl || 0) >= MAX_LEVEL; }
+
 /* ---------------------------------------------------------- guest cast --
    A guest is a single still image, not a drawn skeleton, so it cannot have
    a real run cycle. It gets procedural motion instead — bob, squash on the
@@ -767,7 +936,7 @@ function paintGuestCell(g, spec, P, K) {
   g.setTransform(K, 0, 0, K, 0, 0);
   g.translate(MIDX + P.dx, FEET + P.dy - P.lift);
   g.rotate(P.rot);
-  g.scale(P.sx, P.sy);
+  g.scale(P.sx * (spec.grow || 1), P.sy * (spec.grow || 1));
   /* Upscaling pixel art with bilinear turns it to mush, and downscaling with
      nearest drops whole rows. Pick per sprite by which way we're going. */
   g.imageSmoothingEnabled = (spec.dw * K) < spec.sw * 0.95;
@@ -820,6 +989,7 @@ var bakedAt = 0;            // scale the current sheets were baked at
 
 function bakeAll(K, onDone) {
   bakedAt = K; sheets = new Array(ROSTER.length);
+  for (var q = 0; q < ROSTER.length; q++) if (ROSTER[q].lvl) applyProgression(ROSTER[q]);
   blobCache = {};
   bakeGraves(K);
   var i = 0;
@@ -1246,6 +1416,8 @@ function flareMark(m, on) {
 /* ---------------------------------------------------------------- sim --- */
 
 var actors = [], projs = [], parts = [], duels = [], graves = [], portals = [];
+var levelups = [], shocks = [];
+var tally = { duel: 0, wrestle: 0, piggyback: 0, gang: 0, social: 0, ultimate: 0, deaths: 0 };
 
 var GRAVE_LIFE = 30;     // seconds a marker stands before it fades
 var GRAVE_MAX = 10;      // never let the strip fill up with headstones
@@ -1261,7 +1433,14 @@ var bag = [], lastDrawn = -1;
 
 function refillBag() {
   bag = [];
-  for (var i = 0; i < ROSTER.length; i++) if (!ROSTER[i].off) bag.push(i);
+  for (var i = 0; i < ROSTER.length; i++) {
+    if (ROSTER[i].off) continue;
+    bag.push(i);
+    /* a fighter with a record shows up more often, so a run can actually
+       build into an evolution rather than being spread thin across the cast */
+    if ((ROSTER[i].lvl || 0) >= 2) bag.push(i);
+    if ((ROSTER[i].lvl || 0) >= 4) bag.push(i);
+  }
   if (!bag.length) { for (var z = 0; z < ROSTER.length; z++) bag.push(z); }
   for (var j = bag.length - 1; j > 0; j--) {          // Fisher-Yates
     var k = (RNG() * (j + 1)) | 0, t = bag[j]; bag[j] = bag[k]; bag[k] = t;
@@ -1302,6 +1481,14 @@ function wantCount() { return cfg.count; }
 
 function margin() { return V.cellW * 2 + 360; }
 
+/* Only a couple of champions hold the field at once; any more and the strip
+   stops being a parade. Extras leave the way everyone else does. */
+function residentCount() {
+  var n = 0;
+  for (var i = 0; i < actors.length; i++) if (isFinal(actors[i].s)) n++;
+  return n;
+}
+
 var lastDir = -1;
 
 /* Guests arrive through the mark: it flares, a column of light opens, and
@@ -1330,8 +1517,8 @@ function spawn(initial) {
     : (dir > 0 ? -V.cellW - rnd(0, 300) : V.VW + V.cellW + rnd(0, 300));
   var a = makeActor(dir, x);
   if (initial) a.cool = rnd(4, 20);
-  /* guests step out of the logo; the drawn cast walks on from the edge */
-  if (!initial && a.s.guest) portalSpawn(a);
+  /* guests and challengers step out of the mark; the core cast walks on */
+  if (!initial && (a.s.guest || a.s.challenger)) portalSpawn(a);
   actors.push(a);
 }
 
@@ -1365,23 +1552,120 @@ function tryDuel() {
       if (gap > V.cellW * 1.6 || gap < V.cellW * 0.7) continue;
       var closing = (a.x < b.x && a.dir > 0) || (b.x < a.x && b.dir > 0);
       if (!closing) continue;
-      var d = { a: a, b: b, t: 0, next: 0.35, k: 0, n: 3 + ((RNG() * 3) | 0), over: 0 };
-      a.duel = b.duel = d; a.st = b.st = 'duel';
-      a.face = a.x < b.x ? 1 : -1; b.face = -a.face;
-      duels.push(d);
-      return;                        // at most one new duel per scan
+
+      /* A fighter in its final form is left alone or joined, never jumped. */
+      if (isFinal(a.s) || isFinal(b.s)) { startSocial(a, b); return; }
+
+      /* Is there a third close by, running the same way as one of them? */
+      var ally = null, lead = null, mark = null;
+      for (var k = 0; k < actors.length; k++) {
+        var c = actors[k];
+        if (c === a || c === b || c.st !== 'run') continue;
+        if (c.dir === a.dir && Math.abs(c.x - a.x) < V.cellW * 5) { ally = c; lead = a; mark = b; break; }
+        if (c.dir === b.dir && Math.abs(c.x - b.x) < V.cellW * 5) { ally = c; lead = b; mark = a; break; }
+      }
+
+      var roll = RNG();
+      if (a.s.grappler || b.s.grappler) {          // a grappler grapples
+        if (roll < 0.62) { startBout('wrestle', a, b); return; }
+      }
+      if (roll < 0.22) {                           // 0.00 - 0.22
+        if (ally) startGang(lead, ally, mark); else startBout('wrestle', a, b);
+        return;
+      }
+      if (roll < 0.44) { startBout('wrestle', a, b); return; }      // 0.22 - 0.44
+      if (roll < 0.60) { startPiggyback(a, b); return; }            // 0.44 - 0.60
+      startBout('duel', a, b);                                      // 0.60 - 1.00
+      return;
     }
   }
 }
 
+function faceOff(a, b) {
+  a.face = a.x < b.x ? 1 : -1;
+  b.face = -a.face;
+}
+
+function startBout(kind, a, b) {
+  var d = { kind: kind, a: a, b: b, t: 0, next: kind === 'wrestle' ? 0.4 : 0.35,
+            k: 0, n: 3 + ((RNG() * 3) | 0), over: 0,
+            lockA: a.x, lockB: b.x };
+  tally[kind]++;
+  a.duel = b.duel = d;
+  a.st = b.st = (kind === 'wrestle' ? 'wrestle' : 'duel');
+  faceOff(a, b);
+  duels.push(d);
+}
+
+/* Two on one. The pair flank their mark and take turns. */
+function startGang(lead, ally, mark) {
+  var d = { kind: 'gang', a: lead, b: mark, c: ally, t: 0, next: 0.5, k: 0,
+            n: 4 + ((RNG() * 3) | 0), over: 0, ult: 0 };
+  tally.gang++;
+  lead.duel = ally.duel = mark.duel = d;
+  lead.st = ally.st = mark.st = 'duel';
+  lead.face = lead.x < mark.x ? 1 : -1;
+  ally.x = mark.x - lead.face * V.cellW * 1.0;
+  ally.face = lead.face;
+  mark.face = -lead.face;
+  /* the outnumbered one may find something extra */
+  var edge = 0.18 + (mark.s.lvl || 0) * 0.13;
+  d.ultAt = RNG() < edge ? (1.1 + RNG() * 0.9) : 0;
+  duels.push(d);
+}
+
+/* One climbs on the other and they travel together. Nobody gets hurt. */
+function startPiggyback(a, b) {
+  var rider = a.s.spd >= b.s.spd ? a : b, carrier = rider === a ? b : a;
+  if (isFinal(rider.s) && !isFinal(carrier.s)) { var t2 = rider; rider = carrier; carrier = t2; }
+  var d = { kind: 'piggyback', a: carrier, b: rider, t: 0, over: 4 + RNG() * 5, mount: 0 };
+  tally.piggyback++;
+  carrier.duel = rider.duel = d;
+  carrier.st = 'carry'; rider.st = 'mounting';
+  rider.dir = carrier.dir; rider.face = carrier.face = carrier.dir;
+  duels.push(d);
+}
+
+/* Nobody picks a fight with a final form: they tag along or steer clear. */
+function startSocial(a, b) {
+  tally.social++;
+  var boss = isFinal(a.s) ? a : b, other = boss === a ? b : a;
+  if (RNG() < 0.45) {
+    startPiggyback(boss, other);                    // befriended
+  } else {
+    other.dir = -other.dir;                         // give it a wide berth
+    other.face = other.dir;
+    other.cool = rnd(9, 18);
+    other.spooked = 1.6;
+  }
+}
+
+function releaseCast(d) {
+  var cast = [d.a, d.b].concat(d.c ? [d.c] : []);
+  for (var i = 0; i < cast.length; i++) {
+    var f = cast[i];
+    if (!f) continue;
+    f.duel = null; f.atkT = 0;
+    if (f.st !== 'down') { f.st = 'run'; f.y = f.y > 0 ? 0 : f.y; f.face = f.dir; }
+    f.cool = rnd(5, 14);
+  }
+  var k = duels.indexOf(d); if (k >= 0) duels.splice(k, 1);
+}
+
 function endDuel(d, noKill) {
-  var loser = RNG() < 0.5 ? d.a : d.b;
+  if (d.kind && d.kind !== 'duel') { releaseCast(d); return; }
+  /* a higher level wins more often, but never certainly */
+  var la = (d.a.s.lvl || 0), lb = (d.b.s.lvl || 0);
+  var pa = 0.5 + (la - lb) * 0.08;
+  var loser = RNG() < Math.max(0.15, Math.min(0.85, pa)) ? d.b : d.a;
+  var winner = loser === d.a ? d.b : d.a;
   [d.a, d.b].forEach(function (f) {
     f.duel = null; f.st = 'run'; f.face = f.dir;
-    f.cool = rnd(7, 20); f.atkT = 0;
+    f.cool = rnd(5, 14); f.atkT = 0;
   });
   var k = duels.indexOf(d); if (k >= 0) duels.splice(k, 1);
   if (noKill) return;
+  awardXP(winner, 1 + Math.floor((loser.s.lvl || 0) / 2));
 
   /* the loser goes down: knocked back, topples, then leaves a marker */
   loser.st = 'down';
@@ -1394,6 +1678,7 @@ function endDuel(d, noKill) {
 }
 
 function bury(f) {
+  tally.deaths++;
   graves.push({
     x: f.x, t: 0,
     kind: RNG() < 0.5 ? 0 : 1,          // headstone or cross
@@ -1430,6 +1715,7 @@ function stepSim(dt) {
     a.flash = Math.max(0, a.flash - dt);
     a.hurt = Math.max(0, a.hurt - dt);
     a.cool -= dt;
+    if (a.spooked) a.spooked = Math.max(0, a.spooked - dt);
 
     if (a.y < 0 || a.vy < 0) { a.vy += 900 * dt; a.y += a.vy * dt; if (a.y >= 0) { a.y = 0; a.vy = 0; } }
 
@@ -1454,9 +1740,25 @@ function stepSim(dt) {
           if (Math.abs(ot.x - a.x) < V.cellW * 0.5) { a.vy = -215; a.y = -0.01; break; }
         }
       }
-      if (a.x < -margin() || a.x > V.VW + margin()) { actors.splice(i, 1); continue; }
+
     } else if (a.st === 'duel') {
       a.phase = (a.phase + dt * 1.1) % 1;
+    } else if (a.st === 'wrestle') {
+      a.phase = (a.phase + dt * 1.6) % 1;
+    } else if (a.st === 'carry') {
+      var cdx = a.dir * a.speed * 0.8 * dt;
+      a.x += cdx;
+      a.phase = (a.phase + Math.abs(cdx) / (ANIM_CYCLE_ART * V.S)) % 1;
+    } else if (a.st === 'ride') {
+      var cr = a.duel && a.duel.a;
+      if (cr) { a.x = cr.x - cr.face * 3; a.y = -(FEET - 6) * V.S * (cr.s.grow || 1); a.face = cr.face; }
+      a.phase = (a.phase + dt * 0.6) % 1;
+    } else if (a.st === 'mounting') {
+      var cr2 = a.duel && a.duel.a;
+      if (cr2) {
+        a.x += (cr2.x - a.x) * Math.min(1, dt * 7);
+        a.face = cr2.face;
+      }
     } else if (a.st === 'portal') {
       a.pt += dt;
       if (a.pt > 0.32) {                      // hold in the light, then drop
@@ -1481,6 +1783,21 @@ function stepSim(dt) {
       }
     }
 
+    /* Bounds. A final form has earned the field and turns instead of leaving;
+       everyone else is culled once well clear. This has to sit outside the
+       per-state branches — a carrier in a piggyback walks off just as easily
+       as a runner does. */
+    if (a.st !== 'down' && a.st !== 'portal') {
+      if (isFinal(a.s) && residentCount() <= 2) {
+        if (a.x < V.cellW * 0.6) { a.dir = 1; if (a.st !== 'ride') a.face = 1; }
+        else if (a.x > V.VW - V.cellW * 0.6) { a.dir = -1; if (a.st !== 'ride') a.face = -1; }
+      } else if (a.x < -margin() || a.x > V.VW + margin()) {
+        if (a.duel) endDuel(a.duel, true);
+        actors.splice(i, 1);
+        continue;
+      }
+    }
+
     if (a.atkT > 0) {
       var was = a.atkT; a.atkT -= dt;
       if (!a.struck && was > 0.18 && a.atkT <= 0.18 && a.duel) {
@@ -1491,16 +1808,116 @@ function stepSim(dt) {
     }
   }
 
-  /* duels */
+  /* encounters */
   for (var d2 = duels.length - 1; d2 >= 0; d2--) {
     var d = duels[d2];
-    if (actors.indexOf(d.a) < 0 || actors.indexOf(d.b) < 0) { endDuel(d, true); continue; }
+    var cast = [d.a, d.b].concat(d.c ? [d.c] : []);
+    var lost = false;
+    for (var ci = 0; ci < cast.length; ci++) if (actors.indexOf(cast[ci]) < 0) lost = true;
+    if (lost) { endDuel(d, true); continue; }
     d.t += dt;
+
+    if (d.kind === 'piggyback') {
+      if (!d.mount) {
+        if (Math.abs(d.b.x - d.a.x) < V.cellW * 0.45) {
+          d.mount = 1; d.b.st = 'ride'; d.b.vy = 0;
+          burst(d.a.x, V.groundY - FEET * V.S * 0.6, 8, [d.b.s.c3, '#ffffff'], 0.5);
+        } else if (d.t > 2.5) { endDuel(d, true); }
+        continue;
+      }
+      if (d.t > d.over) {                       // hop down and part ways
+        d.b.st = 'run'; d.b.y = 0; d.b.vy = -170;
+        d.b.dir = -d.a.dir; d.b.face = d.b.dir;
+        endDuel(d, true);
+      }
+      continue;
+    }
+
+    if (d.kind === 'wrestle') {
+      var mid = (d.a.x + d.b.x) / 2;
+      var push = Math.sin(d.t * 7) * 3 * V.S;
+      d.a.x = mid - V.cellW * 0.30 + push;
+      d.b.x = mid + V.cellW * 0.30 + push;
+      if (d.t >= d.next) {
+        d.next = d.t + 0.28;
+        burst(mid, V.groundY - FEET * V.S * 0.55, 5,
+              [d.a.s.c3, d.b.s.c3, '#ffffff'], 0.5);
+        (RNG() < 0.5 ? d.a : d.b).atkT = 0.3;
+      }
+      if (!d.over && d.t > 2.4) d.over = d.t + 0.02;
+      if (d.over && d.t > d.over) {
+        var thrown = RNG() < 0.5 ? d.a : d.b;
+        var holder = thrown === d.a ? d.b : d.a;
+        endDuel(d, true);
+        thrown.vy = -360; thrown.y = -0.01;
+        thrown.knock = -thrown.face * 150;
+        burst(thrown.x, V.groundY - FEET * V.S * 0.5, 20, [thrown.s.c3, '#ffffff'], 1.2);
+        awardXP(holder, 1);                     // the throw itself is the win
+        if (RNG() < 0.62) {                     // and it is often the end of it
+          thrown.st = 'down'; thrown.fall = 0; thrown.hurt = 1; thrown.flash = 0.14;
+        } else {
+          thrown.hurt = 0.8; thrown.cool = rnd(8, 16);
+          thrown.dir = -thrown.face; thrown.face = thrown.dir;
+        }
+      }
+      continue;
+    }
+
+    if (d.kind === 'gang') {
+      /* the outnumbered fighter can turn it around */
+      if (d.ultAt && !d.ult && d.t >= d.ultAt) {
+        d.ult = 1; d.charge = 0;
+        d.b.atkT = 0; d.b.hurt = 0;
+      }
+      if (d.ult) {
+        d.charge += dt;
+        if (d.charge < 0.85) {
+          if (parts.length < 200 && RNG() < dt * 40) {
+            var ang = RNG() * Math.PI * 2, rr = 60 * V.S;
+            parts.push({ x: d.b.x + Math.cos(ang) * rr, y: V.groundY - 30 * V.S + Math.sin(ang) * rr * 0.4,
+                         vx: -Math.cos(ang) * 140, vy: -Math.sin(ang) * 60 - 30,
+                         life: 0.35, max: 0.35, c: d.b.s.c3, sz: 1 });
+          }
+        } else {
+          tally.ultimate++;
+          shocks.push({ x: d.b.x, t: 0, col: d.b.s.c3, life: 0.9 });
+          burst(d.b.x, V.groundY - FEET * V.S * 0.5, 40, [d.b.s.c3, '#ffffff', d.b.s.c4], 1.8);
+          var atkrs = [d.a, d.c];
+          endDuel(d, true);
+          for (var ai = 0; ai < atkrs.length; ai++) {
+            var vic = atkrs[ai];
+            if (!vic || actors.indexOf(vic) < 0) continue;
+            vic.st = 'down'; vic.fall = 0; vic.hurt = 1; vic.flash = 0.16;
+            vic.vy = -300; vic.y = -0.01;
+            vic.knock = (vic.x < d.b.x ? -1 : 1) * 190;
+          }
+          awardXP(d.b, 2);
+        }
+        continue;
+      }
+      if (d.t >= d.next) {
+        var att = (d.k % 2) ? d.c : d.a;
+        if (att && actors.indexOf(att) >= 0) { att.atkT = 0.36; att.struck = false; }
+        d.k++; d.next = d.t + 0.45;
+        if (d.k >= d.n) d.over = d.t + 0.6;
+      }
+      if (d.over && d.t > d.over) {
+        var mark = d.b, w1 = d.a, w2 = d.c;
+        endDuel(d, true);
+        mark.st = 'down'; mark.fall = 0; mark.hurt = 1; mark.flash = 0.14;
+        mark.vy = -210; mark.y = -0.01; mark.knock = -mark.face * 60;
+        burst(mark.x, V.groundY - FEET * V.S * 0.5, 22, [mark.s.c3, '#ffffff'], 1.2);
+        awardXP(w1, 1); if (w2) awardXP(w2, 1);
+      }
+      continue;
+    }
+
+    /* plain duel */
     if (d.over) { if (d.t > d.over) endDuel(d); continue; }
     if (d.t >= d.next) {
-      var att = (d.k % 2) ? d.b : d.a;
-      att.atkT = 0.36; att.struck = false;
-      if (att.s.ranged && RNG() < 0.4) fire(att);
+      var att2 = (d.k % 2) ? d.b : d.a;
+      att2.atkT = 0.36; att2.struck = false;
+      if (att2.s.ranged && RNG() < 0.4) fire(att2);
       d.k++; d.next = d.t + 0.52;
       if (d.k >= d.n) d.over = d.t + 0.75;
     }
@@ -1523,6 +1940,18 @@ function stepSim(dt) {
       }
     }
     if (gone) projs.splice(p, 1);
+  }
+
+  /* shockwaves */
+  for (var sk = shocks.length - 1; sk >= 0; sk--) {
+    shocks[sk].t += dt;
+    if (shocks[sk].t >= shocks[sk].life) shocks.splice(sk, 1);
+  }
+
+  /* level-up banners */
+  for (var lu = levelups.length - 1; lu >= 0; lu--) {
+    levelups[lu].t += dt;
+    if (levelups[lu].t > (levelups[lu].big ? 2.6 : 1.8)) levelups.splice(lu, 1);
   }
 
   /* portals */
@@ -1558,7 +1987,7 @@ function composeStill(seed) {
   RNG = seeded(seed * 2654435761 + 12345);
   try {
     actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0;
-    graves.length = 0; portals.length = 0;
+    graves.length = 0; portals.length = 0; levelups.length = 0; shocks.length = 0;
 
     var n = Math.max(2, cfg.count);
     var slot = V.VW / n;
@@ -1605,6 +2034,9 @@ function frameIndex(a) {
   if (a.st === 'down') return F_HIT;
   if (a.hurt > 0.12 && a.st !== 'duel') return F_HIT;
   if (a.atkT > 0) return F_ATK + Math.min(3, Math.floor((0.36 - a.atkT) / 0.09));
+  if (a.st === 'wrestle') return F_ATK + (Math.floor(a.phase * 4) % 2);
+  if (a.st === 'ride' || a.st === 'mounting') return F_IDLE + (Math.floor(a.phase * 4) % 4);
+  if (a.st === 'carry') return F_RUN + (Math.floor(a.phase * 8) % 8);
   if (a.st === 'duel') return F_IDLE + (Math.floor(a.phase * 4) % 4);
   return F_RUN + (Math.floor(a.phase * 8) % 8);
 }
@@ -1687,6 +2119,23 @@ function draw() {
     var f = vis[v], sh = sheets[f.i];
     if (!sh) continue;
     var cx = f.x - OFF, cy = gy + f.y;
+
+    /* a final form burns — a standing ring of light at its feet */
+    if (f.s.aura) {
+      var pulse = 0.72 + 0.28 * Math.sin(clock * 2.4 + f.x * 0.01);
+      fg.globalCompositeOperation = 'lighter';
+      fg.globalAlpha = 0.5 * pulse;
+      fg.drawImage(glowBlob(f.s.c3), cx - V.cellW * 0.75, gy - V.cellH * 0.5,
+                   V.cellW * 1.5, V.cellH * 0.62);
+      fg.strokeStyle = f.s.c3;
+      fg.lineWidth = Math.max(1, V.S * 0.6);
+      fg.globalAlpha = 0.55 * pulse;
+      fg.beginPath();
+      fg.ellipse(cx, gy - 2, V.cellW * 0.42 * pulse, V.cellW * 0.13 * pulse, 0, 0, Math.PI * 2);
+      fg.stroke();
+      fg.globalCompositeOperation = 'source-over';
+      fg.globalAlpha = 1;
+    }
 
     /* contact shadow + neon pool */
     fg.globalAlpha = 0.5;
@@ -1773,6 +2222,30 @@ function draw() {
     fg.globalAlpha = 1;
   }
 
+  /* ultimate shockwaves */
+  if (shocks.length) {
+    fg.globalCompositeOperation = 'lighter';
+    for (var sw = 0; sw < shocks.length; sw++) {
+      var sc = shocks[sw], sx2 = sc.x - OFF;
+      var kk = sc.t / sc.life;
+      var rad = (1 - Math.pow(1 - kk, 2)) * 210 * V.S;
+      fg.globalAlpha = Math.max(0, 1 - kk) * 0.85;
+      fg.strokeStyle = sc.col;
+      fg.lineWidth = Math.max(2, (1 - kk) * 5 * V.S);
+      fg.beginPath();
+      fg.ellipse(sx2, gy - 14 * V.S, rad, rad * 0.34, 0, 0, Math.PI * 2);
+      fg.stroke();
+      fg.globalAlpha = Math.max(0, 1 - kk) * 0.45;
+      fg.strokeStyle = '#ffffff';
+      fg.lineWidth = Math.max(1, (1 - kk) * 2 * V.S);
+      fg.beginPath();
+      fg.ellipse(sx2, gy - 14 * V.S, rad * 0.72, rad * 0.24, 0, 0, Math.PI * 2);
+      fg.stroke();
+    }
+    fg.globalAlpha = 1;
+    fg.globalCompositeOperation = 'source-over';
+  }
+
   /* projectiles */
   fg.globalCompositeOperation = 'lighter';
   for (var p = 0; p < projs.length; p++) {
@@ -1799,25 +2272,91 @@ function draw() {
   fg.globalAlpha = 1;
   fg.globalCompositeOperation = 'source-over';
 
-  /* duel name plates */
-  if (duels.length) {
-    var fs = Math.max(6, Math.round(3.4 * V.S));
+  /* level-up and evolution banners */
+  if (levelups.length) {
+    for (var li = 0; li < levelups.length; li++) {
+      var lv = levelups[li], lx = lv.x - OFF;
+      if (lx < -160 || lx > W + 160) continue;
+      var span = lv.big ? 2.6 : 1.8;
+      var k2 = lv.t / span;
+      var rise = (1 - Math.pow(1 - Math.min(1, lv.t / 0.5), 3)) * 26 * V.S;
+      var al = Math.min(1, lv.t / 0.18) * Math.max(0, 1 - Math.max(0, k2 - 0.55) / 0.45);
+      var fs2 = Math.max(7, Math.round((lv.big ? 4.6 : 3.2) * V.S));
+
+      if (lv.big) {                                   // evolution shockwave
+        var rr = (1 - Math.pow(1 - Math.min(1, lv.t / 0.6), 2)) * 90 * V.S;
+        fg.globalCompositeOperation = 'lighter';
+        fg.globalAlpha = al * 0.5;
+        fg.strokeStyle = lv.col;
+        fg.lineWidth = Math.max(2, 2.2 * V.S);
+        fg.beginPath();
+        fg.ellipse(lx, gy - 12 * V.S, rr, rr * 0.34, 0, 0, Math.PI * 2);
+        fg.stroke();
+        fg.globalCompositeOperation = 'source-over';
+      }
+
+      fg.globalAlpha = al;
+      fg.font = '400 ' + fs2 + "px 'Press Start 2P',monospace";
+      fg.textAlign = 'center';
+      fg.fillStyle = lv.col;
+      fg.fillText(lv.text, lx, gy - FEET * V.S - 14 * V.S - rise);
+      fg.globalAlpha = 1;
+    }
+  }
+
+  /* Name plates. Anyone in an encounter is labelled for as long as it lasts,
+     on a backing chip so the text stays readable over any background. */
+  var plated = [];
+  for (var pl = 0; pl < actors.length; pl++) {
+    if (isFinal(actors[pl].s) && actors[pl].st !== 'down') plated.push(actors[pl]);
+  }
+  if (duels.length || plated.length) {
+    var fs = Math.max(8, Math.round(3.6 * V.S));
+    var pad = Math.round(fs * 0.5), chipH = fs + pad;
     fg.font = '400 ' + fs + "px 'Press Start 2P',monospace";
-    fg.textAlign = 'center'; fg.textBaseline = 'alphabetic';
+    fg.textAlign = 'center';
+    fg.textBaseline = 'middle';
+
+    /* everyone in a scrap, plus any champion, which is always announced */
+    var groups = [];
     for (var d = 0; d < duels.length; d++) {
-      var du = duels[d], fade = Math.min(1, du.t / 0.3) * (du.over ? Math.max(0, 1 - (du.t - du.over + 0.75) / 0.75) : 1);
-      if (fade <= 0.02) continue;
-      [du.a, du.b].forEach(function (f2) {
+      var du = duels[d];
+      if (du.kind === 'piggyback') continue;              // nobody is fighting
+      groups.push({ fade: Math.min(1, du.t / 0.25),
+                    cast: [du.a, du.b].concat(du.c ? [du.c] : []) });
+    }
+    if (plated.length) groups.push({ fade: 1, cast: plated });
+
+    for (var d = 0; d < groups.length; d++) {
+      var fade = groups[d].fade, cast = groups[d].cast;
+
+      for (var ci = 0; ci < cast.length; ci++) {
+        var f2 = cast[ci];
+        if (cast !== plated && isFinal(f2.s)) continue;   // drawn once, below
+        if (!f2 || f2.st === 'down') continue;
         var tx = f2.x - OFF;
-        if (tx < -100 || tx > W + 100) return;
-        fg.globalAlpha = fade * 0.9;
+        if (tx < -220 || tx > W + 220) continue;
+
+        var lvl = f2.s.lvl || 0;
+        var label = f2.s.name + (lvl ? '  L' + lvl : '');
+        var tw = fg.measureText(label).width;
+        var ty = gy - FEET * V.S * (f2.s.grow || 1) - 9 * V.S;
+
+        fg.globalAlpha = fade * 0.72;                     // backing chip
+        fg.fillStyle = 'rgba(3,9,18,0.9)';
+        fg.fillRect(tx - tw / 2 - pad, ty - chipH / 2, tw + pad * 2, chipH);
+        fg.globalAlpha = fade * 0.85;
         fg.fillStyle = f2.s.c3;
-        fg.fillText(f2.s.name, tx, gy - FEET * V.S - 6 * V.S);
-        fg.globalAlpha = fade * 0.35;
-        fg.fillRect(tx - fs * 3, gy - FEET * V.S - 4.4 * V.S, fs * 6, 1);
-      });
+        fg.fillRect(tx - tw / 2 - pad, ty + chipH / 2 - Math.max(1, V.S * 0.5),
+                    tw + pad * 2, Math.max(1, V.S * 0.5));
+
+        fg.globalAlpha = fade;
+        fg.fillStyle = '#eaf6ff';
+        fg.fillText(label, tx, ty);
+      }
     }
     fg.globalAlpha = 1;
+    fg.textBaseline = 'alphabetic';
   }
 }
 
@@ -2042,20 +2581,27 @@ function ingestManifest(m, cache) {
    is generated client-side and is effectively endless. Sprites are 128x128
    RGBA with the background left transparent, which is what lets them be
    trimmed to a common height. Images are CC-BY; credit is in the README. */
-var ROBO_WORDS = ['nova','rift','onyx','vex','kilo','pyre','helix','drift','apex','quill',
-                  'zenith','flux','orbit','ember','cinder','vault','lumen','strider','harrow','koda'];
+/* Seeds, not a fixed cast: RoboHash renders a distinct character for any
+   string, so the pool is words x numbers x sets — effectively unbounded. */
+var ROBO_WORDS = [
+  'nova','rift','onyx','vex','kilo','pyre','helix','drift','apex','quill',
+  'zenith','flux','orbit','ember','cinder','vault','lumen','strider','harrow','koda',
+  'atlas','borea','cobalt','delta','ecko','fable','gambit','hydra','ion','jinx',
+  'krait','lyric','mantis','nadir','osprey','prism','quasar','rogue','sable','talon',
+  'umbra','vector','wraith','xenon','yarrow','zephyr','basalt','cairn','dusk','ferrum'];
+var ROBO_SETS = ['set1', 'set2', 'set3', 'set5'];
 
 function robohashRoster(n) {
   var out = [], used = {};
   for (var i = 0; i < n * 3 && out.length < n; i++) {
     var w = ROBO_WORDS[(RNG() * ROBO_WORDS.length) | 0];
-    var seed = w + '-' + (100 + ((RNG() * 900) | 0));
+    var seed = w + '-' + (100 + ((RNG() * 9900) | 0));
     if (used[seed]) continue;
     used[seed] = 1;
     out.push({
       name: seed.replace('-', ' '),
       sprite: 'https://robohash.org/' + encodeURIComponent(seed) +
-              '?set=' + (RNG() < 0.5 ? 'set1' : 'set2') + '&size=160x160',
+              '?set=' + ROBO_SETS[(RNG() * ROBO_SETS.length) | 0] + '&size=160x160',
       scale: 1, speed: 0.85 + RNG() * 0.5, ranged: RNG() < 0.35
     });
   }
@@ -2069,7 +2615,7 @@ function robohashRoster(n) {
 function pokeapiRoster(n) {
   var ids = [], seen = {};
   while (ids.length < n) {
-    var id = 1 + ((RNG() * 493) | 0);
+    var id = 1 + ((RNG() * 1017) | 0);      // every id with a front sprite
     if (!seen[id]) { seen[id] = 1; ids.push(id); }
   }
   return Promise.all(ids.map(function (id) {
@@ -2139,6 +2685,7 @@ function relayout(rebake) {
 }
 
 function ready() {
+  if (!guestState.xpLoaded) { guestState.xpLoaded = true; if (cfg.levels) loadXP(); }
   if (cfg.still) {
     running = false;
     document.body.classList.add('still');
@@ -2273,7 +2820,10 @@ try {
       roster: ROSTER, cells: CELLS, art: { w: ART_W, h: ART_H, feet: FEET, midx: MIDX },
       sheets: function () { return sheets; },
       graves: function () { return graves; },
+      duels: function () { return duels; },
+      tally: function () { return tally; },
       sources: SOURCES,
+      award: awardXP,
       portalTest: function () {                 // force a guest through the mark
         var gi = [];
         for (var i = 0; i < ROSTER.length; i++) if (ROSTER[i].guest) gi.push(i);
