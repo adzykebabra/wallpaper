@@ -97,15 +97,24 @@ edges, node-and-connector detail — and the centred lockup is the hexagon mark
 (crimson outer ring, cyan inner ring, upward chevron) over the wordmark. It is
 all drawn in vector/canvas, so it stays sharp from 1080p to 4K.
 
-**To use the real placemat artwork instead**, drop the file in as
-`assets/placemat.png` (`.jpg`, `.webp` and `.svg` also work) and rebuild:
+### Dropping in the real artwork
+
+Two slots, both optional. Put a file in `assets/` and rebuild:
 
     python3 tools/build.py
 
-The build inlines it as a data URI — the wallpaper stays a single offline
-file — and it is then displayed verbatim, centred on each monitor, in place
-of the drawn lockup. Nothing else changes; the fighters still run along the
-taskbar in front of it. Remove the file and rebuild to go back.
+| File | Replaces |
+|------|----------|
+| `assets/logo.svg` (or `.png`/`.webp`/`.jpg`) | The drawn lockup — your exact mark, on every monitor |
+| `assets/placemat.png` (or `.svg`/`.webp`/`.jpg`) | The whole centred card, including the photo strips |
+
+The build inlines whichever it finds as a data URI, so the wallpaper stays a
+single offline file. A placemat wins over a logo; a logo wins over the drawn
+mark. Nothing else changes — the fighters still run along the taskbar in
+front. Delete the file and rebuild to go back to the drawn version.
+
+**Prefer `.svg` for the logo.** A vector lockup stays sharp from a 1080p
+laptop to a 4K panel; a small PNG will be upscaled and go soft.
 
 ## Fallen fighters
 

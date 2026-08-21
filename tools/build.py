@@ -15,29 +15,32 @@ def read(*parts):
     with open(os.path.join(ROOT, *parts), encoding="utf8") as f:
         return f.read()
 
-PLACEMAT_MIME = {
-    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-    ".webp": "image/webp", ".svg": "image/svg+xml", ".gif": "image/gif",
+# .svg first: a vector lockup stays sharp at every size, unlike a bitmap
+ASSET_MIME = {
+    ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp",
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
 }
 
 
-def placemat_data_uri():
-    """Inline assets/placemat.* if the real artwork has been dropped in.
+def asset_data_uri(stem, label):
+    """Inline assets/<stem>.(svg|png|webp|jpg) if it has been dropped in.
 
-    Optional. Without it the wallpaper draws its own Bluerydge lockup, which
-    stays sharp at any resolution; with it, the supplied artwork is used
-    verbatim, centred on each monitor.
+    Optional. Without it the wallpaper draws its own artwork, which stays
+    sharp at any resolution; with it, the supplied file is used verbatim.
     """
-    for ext, mime in PLACEMAT_MIME.items():
-        path = os.path.join(ROOT, "assets", "placemat" + ext)
+    for ext, mime in ASSET_MIME.items():
+        path = os.path.join(ROOT, "assets", stem + ext)
         if not os.path.exists(path):
             continue
         with open(path, "rb") as f:
             raw = f.read()
-        uri = "data:%s;base64,%s" % (mime, base64.b64encode(raw).decode("ascii"))
-        print("  embedding assets/placemat%s (%.1f KB)" % (ext, len(raw) / 1024))
-        return uri
+        print("%s: assets/%s%s (%.1f KB)" % (label, stem, ext, len(raw) / 1024))
+        return "data:%s;base64,%s" % (mime, base64.b64encode(raw).decode("ascii"))
     return ""
+
+
+def placemat_data_uri():
+    return asset_data_uri("placemat", "  placemat")
 
 
 def guest_endpoint():
@@ -75,6 +78,7 @@ def main():
     fonts = json.loads(read("assets", "fonts.json"))
     app = app.replace("__PLACEMAT_SRC__", placemat_data_uri())
     app = app.replace("__GUEST_ENDPOINT__", guest_endpoint())
+    app = app.replace("__LOGO_SRC__", asset_data_uri("logo", "  logo"))
 
     if "</script>" in app:
         sys.exit("app.js must not contain a literal </script>")
@@ -85,7 +89,7 @@ def main():
             .replace("__APP_JS__", app))
 
     for token in ("__FONT_PRESSSTART__", "__FONT_RAJDHANI__", "__APP_JS__",
-                  "__PLACEMAT_SRC__", "__GUEST_ENDPOINT__"):
+                  "__PLACEMAT_SRC__", "__GUEST_ENDPOINT__", "__LOGO_SRC__"):
         if token in html:
             sys.exit("unsubstituted token: " + token)
 

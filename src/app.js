@@ -1026,6 +1026,11 @@ function nodeWeb(G, U) {
    here as a data URI and used verbatim, centred on each monitor, in place of
    the drawn lockup. See tools/build.py. Empty otherwise. */
 var PLACEMAT_SRC = '__PLACEMAT_SRC__';
+
+/* Likewise assets/logo.(svg|png|webp|jpg): the exact lockup, used in place of
+   the drawn one. Prefer .svg — it stays sharp at every size. Takes precedence
+   over the drawn mark; a placemat, being the larger artwork, wins over both. */
+var LOGO_SRC = '__LOGO_SRC__';
 /* Rendered as DOM/SVG rather than into the canvas: it stays perfectly crisp
    at any DPI and costs nothing per frame.                                   */
 
@@ -1075,11 +1080,19 @@ function buildMarks() {
                                            : Math.min(V.stripTop * 0.62, V.H * 0.42)) + 'px';
     d.style.animationDelay = (p * 0.9) + 's';
 
-    if (PLACEMAT_SRC) {                       // the real artwork, if it was embedded
+    if (PLACEMAT_SRC) {                       // the full placemat, if embedded
       var maxW = Math.min(pw * 0.78, V.W * 0.9);
       var maxH = V.stripTop * 0.82;
       d.innerHTML = '<img class="pm" src="' + PLACEMAT_SRC + '" alt="Bluerydge" ' +
         'style="max-width:' + Math.round(maxW) + 'px;max-height:' + Math.round(maxH) + 'px">';
+      marksEl.appendChild(d);
+      continue;
+    }
+
+    if (LOGO_SRC) {                           // the supplied lockup, if embedded
+      d.innerHTML = '<img class="pm" src="' + LOGO_SRC + '" alt="Bluerydge" ' +
+        'style="width:' + Math.round(lock) + 'px;max-width:' +
+        Math.round(V.W * 0.9) + 'px;max-height:' + Math.round(V.stripTop * 0.7) + 'px">';
       marksEl.appendChild(d);
       continue;
     }
