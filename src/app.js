@@ -35,6 +35,7 @@ var DEFAULTS = {
   grain: 0,       // scanlines suit a cyber scene; off for the valley
   maxDpr: 2,
   guests: 'mix',        // 'mix' | 'robohash' | 'pokeapi' | 'endpoint' | 'off'
+  widths: '',     // per-monitor mode with unequal monitors: '1920,2560'
   seed: 0,        // world seed; 0 rolls one on first run and keeps it
   still: 0        // >0 freezes a composed frame, using this value as the seed
 };
@@ -75,7 +76,7 @@ var cfg = (function () {
     else if (legacy === 'right') c.panel = 1;
     q.forEach(function (v, key) {
       if (!(key in c)) return;
-      if (key === 'guests') { c[key] = v; return; }
+      if (key === 'guests' || key === 'widths') { c[key] = v; return; }
       c[key] = NUM[key] ? parseFloat(v) : (v === '0' || v === 'false' ? 0 : 1);
     });
   } catch (e) {}
@@ -1067,6 +1068,17 @@ function measure() {
   var W = Math.max(320, window.innerWidth), H = Math.max(240, window.innerHeight);
   var dpr = Math.min(cfg.maxDpr, window.devicePixelRatio || 1);
   var solo = cfg.panel >= 0;                       // one instance per monitor
+
+  /* Monitors of different widths: '?widths=1920,2560' tells every instance
+     the true layout, so they all agree on the world's size and their own
+     slice of it — without it, per-monitor mode assumes equal monitors. */
+  var widths = null;
+  if (solo && /^\d+(,\d+)+$/.test(cfg.widths)) {
+    var wl = cfg.widths.split(',').map(Number);
+    if (wl.length >= cfg.panel + 1 && wl.every(function (v) { return v >= 320 && v <= 16384; })) {
+      widths = wl;
+    }
+  }
   var panelW = solo ? W : W / cfg.screens;
   var S = cfg.scale;
   var groundY = Math.max(40, H - cfg.taskbar);
@@ -1075,6 +1087,14 @@ function measure() {
   /* The portal is the sun by day and the moon by night, and it keeps real
      hours: rising on the left, peaking at midday or midnight, setting right. */
   var VW0 = solo ? W * cfg.screens : W;
+  var OFF0 = solo ? cfg.panel * W : 0;
+  if (widths) {
+    VW0 = 0; OFF0 = 0;
+    for (var wi = 0; wi < widths.length; wi++) {
+      if (wi < cfg.panel) OFF0 += widths[wi];
+      VW0 += widths[wi];
+    }
+  }
   var hf = cfg.hour >= 0 ? cfg.hour : 13;
   if (cfg.hour < 0 && cfg.ambient) {
     var dn = new Date(); hf = dn.getHours() + dn.getMinutes() / 60;
@@ -1094,8 +1114,8 @@ function measure() {
   V = {
     W: W, H: H, dpr: dpr, S: S,
     U: Math.min(2.4, Math.max(0.7, H / 1080)),     // scene scale vs. a 1080p screen
-    VW: solo ? W * cfg.screens : W,                // virtual span width
-    OFF: solo ? cfg.panel * W : 0,                 // virtual x of this window's left edge
+    VW: VW0,                                       // virtual span width
+    OFF: OFF0,                                     // virtual x of this window's left edge
     panelW: panelW, panels: cfg.screens,
     groundY: groundY, stripTop: stripTop, stripH: H - stripTop, sun: sun,
     cellW: ART_W * S, cellH: ART_H * S,
@@ -3949,7 +3969,11 @@ function spanCheck() {
       'To run the valley across both screens, set your wallpaper engine to span: ' +
       'in Lively, <i>Settings &rarr; Wallpaper &rarr; Placement &rarr; Span across all displays</i>. ' +
       'Or give each monitor its own instance with <code>?screen=left</code> and ' +
-      '<code>?screen=right</code> plus the same <code>?seed=</code>.' +
+      '<code>?screen=right</code> plus the same <code>?seed=</code>.<br>' +
+      '<b>Monitors of different sizes?</b> For spanning, drag the display boxes in ' +
+      'Windows <i>Settings &rarr; System &rarr; Display</i> so their <b>bottom edges line up</b> ' +
+      '&mdash; otherwise the shorter screen shows only sky. For per-monitor instances, add ' +
+      '<code>?widths=1920,2560</code> (your real widths) to both.' +
       '<button id="spanhint-x">Got it</button>';
     document.body.appendChild(d);
     document.getElementById('spanhint-x').addEventListener('click', function () {

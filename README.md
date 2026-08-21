@@ -34,11 +34,26 @@ Also set *Wallpaper input* to Desktop so the **H**/**L** hotkeys reach it.
 For the screensaver, Lively's one-time `.scr` setup applies (Library →
 Active Wallpapers → Screensaver).
 
+**Monitors of different resolutions** (e.g. a 1080p beside a 1440p): a
+spanning window is as tall as your tallest monitor, and each screen shows
+whatever part of it overlaps. If the shorter screen shows **only sky**, your
+displays are top-aligned: open Windows *Settings → System → Display*, drag
+the monitor boxes so their **bottom edges line up**, and Apply. The ground
+then sits on both taskbars, and the shorter monitor simply crops the top of
+the sky — which is the correct framing. Keep both displays on the same
+scaling percentage if you can; mixed DPI inside one spanning window is
+glitchy in every engine.
+
 **Engines that can't span** (or if you prefer per-display windows): give
 each monitor its own instance — `?screen=left&seed=7` and
 `?screen=right&seed=7`. Each renders its own slice of the same valley; the
 same `seed` on both is what makes the halves match across the bezel.
 `?panel=0/1/2` extends this to three or more monitors (with `?screens=3`).
+If the monitors are different widths, tell every instance the real layout
+with `?widths=1920,2560` — verified: both instances then agree on one world,
+with the sun and the gorge at the same physical spot. Each instance uses its
+own monitor's height, so the ground sits on each taskbar correctly — this is
+also the cleanest setup for mixed-resolution rigs.
 
 The Windows lock screen only takes a still image — pre-rendered stills are in
 `lockscreen/`, or render your own with `node tools/export.js 3440x1440`.
@@ -121,6 +136,7 @@ too — `Copy URL` bakes the current settings into a link:
 | `levels`   | `1`     | Progression on/off; `seedxp=14` previews final forms |
 | `portal`   | `1`     | `0` = everyone walks in from the edges |
 | `ambient`  | `1`     | Follow the real clock; `hour=22` pins any time of day |
+| `widths`   | –       | Per-monitor mode, unequal monitors: real widths, e.g. `widths=1920,2560` |
 | `seed`     | auto    | World seed; rolled once per machine, `seed=N` reproduces a valley |
 | `still`    | `0`     | Non-zero renders one composed, deterministic frame |
 | `grain`    | `0`     | Scanline overlay, off by default for the valley |
