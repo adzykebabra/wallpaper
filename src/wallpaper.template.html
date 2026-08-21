@@ -29,7 +29,10 @@ body.idle{cursor:none}
 #marks{position:fixed;inset:0;z-index:1;pointer-events:none}
 .mark{position:absolute;display:flex;flex-direction:column;align-items:center;
   transform:translate(-50%,-50%);animation:breathe 7s ease-in-out infinite}
-.mark .hexwrap{position:relative;display:block;filter:drop-shadow(0 0 18px rgba(0,170,255,.45))}
+.mark .hexwrap{position:relative;display:block;
+  filter:drop-shadow(0 0 14px rgba(224,33,63,.35)) drop-shadow(0 0 22px rgba(0,170,255,.4))}
+.mark .pm{display:block;width:auto;height:auto;
+  filter:drop-shadow(0 10px 40px rgba(0,0,0,.65)) drop-shadow(0 0 60px rgba(0,120,255,.28))}
 .mark .word{font-family:Rajdhani,'Segoe UI',sans-serif;font-weight:700;color:#eaf7ff;
   white-space:nowrap;line-height:1;text-shadow:0 0 22px rgba(0,190,255,.55),0 0 60px rgba(0,120,255,.3)}
 .mark .rule{height:1px;background:linear-gradient(90deg,transparent,rgba(0,210,255,.75),transparent)}

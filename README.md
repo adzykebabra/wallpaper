@@ -6,8 +6,10 @@ wallpaper engine (Lively, Wallpaper Engine, Plash, `xwinwrap`, …) at it.
 
 Pixel-art fighters run along the top edge of the taskbar, right across both
 screens — four at a time, drawn from a roster of sixteen so you rarely see
-the same one twice in a row. When two meet head-on they trade a few blows
-and move on. The Bluerydge mark sits centred on each monitor.
+the same one twice in a row. When two meet head-on they duel; the loser goes
+down and leaves a headstone or a cross that stands for thirty seconds before
+fading. The Bluerydge mark sits centred on each monitor, over the brand's
+hex-lattice and halftone background.
 
 No network access, no frameworks, no build step required — the fonts are
 embedded as base64 woff2, so it renders identically offline.
@@ -87,6 +89,35 @@ To render your own size, or a different composition:
     node tools/export.js 3440x1440
     SEED=12 COUNT=10 LOGOY=0.62 node tools/export.js
 
+## Brand artwork
+
+The background is drawn from the Bluerydge placemat's own visual language —
+near-black navy, a loose hex lattice, halftone dot fields biased to the panel
+edges, node-and-connector detail — and the centred lockup is the hexagon mark
+(crimson outer ring, cyan inner ring, upward chevron) over the wordmark. It is
+all drawn in vector/canvas, so it stays sharp from 1080p to 4K.
+
+**To use the real placemat artwork instead**, drop the file in as
+`assets/placemat.png` (`.jpg`, `.webp` and `.svg` also work) and rebuild:
+
+    python3 tools/build.py
+
+The build inlines it as a data URI — the wallpaper stays a single offline
+file — and it is then displayed verbatim, centred on each monitor, in place
+of the drawn lockup. Nothing else changes; the fighters still run along the
+taskbar in front of it. Remove the file and rebuild to go back.
+
+## Fallen fighters
+
+Losing a duel is fatal. The loser is knocked back, topples, fades, and a
+marker rises where they fell — a stone headstone or a wooden cross, picked at
+random, glowing faintly in that fighter's colour with their name above it for
+a few seconds. Markers stand for **30 seconds**, fade over the last two, and
+are capped at ten so the strip never fills up. A replacement fighter walks on
+straight away, so there are always four.
+
+Set `?duels=0` if you would rather nobody fought at all.
+
 ## Settings
 
 Press **H** over the wallpaper for the settings panel — monitors, fighter
@@ -105,7 +136,7 @@ Every setting is also a URL parameter:
 | `scale`    | `2`     | Sprite pixel scale. Fighters are `28 × scale` px tall, so `2` ≈ 56 px |
 | `taskbar`  | `48`    | Height of your taskbar in px — the fighters run on this line |
 | `fps`      | `60`    | Frame cap. Drop to `30` on a laptop |
-| `duels`    | `1`     | Set `0` for a plain parade |
+| `duels`    | `1`     | Set `0` for a plain parade — nobody duels, nobody dies |
 | `logo`     | `1`     | Set `0` to hide the wordmarks |
 | `logoy`    | `0`     | Logo height as a fraction of the screen; `0` = automatic |
 | `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |

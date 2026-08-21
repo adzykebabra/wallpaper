@@ -642,6 +642,57 @@ function bakeSheets(s, K) {
   return { right: R, left: L, cw: w, ch: h };
 }
 
+/* Grave markers. GRAVE_H art px tall — about half a fighter — so they read
+   as scenery beside the taskbar rather than competing with the runners. */
+var GRAVE_W = 16, GRAVE_H = 18;
+
+function drawGravestone(g) {
+  var dark = '#262b33', stone = '#8b95a3', lit = '#bcc6d4', shade = '#5d6672';
+
+  /* rounded-top slab, built row by row so the cap curves properly */
+  g.fillStyle = dark;                                   // silhouette + outline
+  g.fillRect(4, 1, 8, 2); g.fillRect(3, 2, 10, 2); g.fillRect(2, 3, 12, 13);
+  g.fillStyle = stone;                                  // face, cap curving in
+  g.fillRect(5, 2, 6, 1); g.fillRect(4, 3, 8, 1); g.fillRect(3, 4, 10, 11);
+
+  g.fillStyle = lit;  g.fillRect(4, 4, 2, 11); g.fillRect(5, 3, 3, 1);
+  g.fillStyle = shade; g.fillRect(11, 4, 2, 11); g.fillRect(9, 3, 2, 1);
+
+  g.fillStyle = shade;                                  // engraved cross
+  g.fillRect(7, 7, 2, 6);
+  g.fillRect(6, 8, 4, 2);
+
+  g.fillStyle = dark;  g.fillRect(0, GRAVE_H - 3, GRAVE_W, 3);   // plinth
+  g.fillStyle = stone; g.fillRect(1, GRAVE_H - 3, GRAVE_W - 2, 2);
+  g.fillStyle = lit;   g.fillRect(1, GRAVE_H - 3, GRAVE_W - 2, 1);
+}
+
+function drawCross(g) {
+  var wood = '#8a6b45', lit = '#b08d5e', dark = '#2a1f14', shade = '#5f4a30';
+  g.fillStyle = dark; g.fillRect(6, 1, 5, GRAVE_H - 3);            // upright
+  g.fillStyle = wood; g.fillRect(7, 2, 3, GRAVE_H - 5);
+  g.fillStyle = lit; g.fillRect(7, 2, 1, GRAVE_H - 5);
+  g.fillStyle = dark; g.fillRect(2, 5, 13, 5);                     // crossbeam
+  g.fillStyle = wood; g.fillRect(3, 6, 11, 3);
+  g.fillStyle = lit; g.fillRect(3, 6, 11, 1);
+  g.fillStyle = shade; g.fillRect(3, 8, 11, 1);
+  g.fillStyle = dark; g.fillRect(4, GRAVE_H - 3, 9, 3);            // mound
+  g.fillStyle = '#3d4a3a'; g.fillRect(5, GRAVE_H - 3, 7, 2);
+}
+
+var graveSheets = null;
+
+function bakeGraves(K) {
+  var out = [];
+  [drawGravestone, drawCross].forEach(function (fn) {
+    var c = mkCanvas(GRAVE_W * K, GRAVE_H * K), g = ctx2d(c);
+    g.setTransform(K, 0, 0, K, 0, 0);
+    fn(g);
+    out.push(c);
+  });
+  graveSheets = out;
+}
+
 /* Soft coloured blob reused for ground glow, muzzle flash and projectiles.
    Baked once per colour so runtime never touches a gradient. */
 var blobCache = {};
@@ -662,6 +713,7 @@ var bakedAt = 0;            // scale the current sheets were baked at
 function bakeAll(K, onDone) {
   bakedAt = K; sheets = new Array(ROSTER.length);
   blobCache = {};
+  bakeGraves(K);
   var i = 0;
   (function chunk() {
     var t0 = (window.performance || Date).now();
@@ -736,94 +788,156 @@ function hexPath(g, cx, cy, r) {
 }
 
 function paintScene() {
-  var W = V.W, H = V.H, G = V.groundY;
+  var W = V.W, H = V.H, G = V.groundY, U = V.U;
   sg.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
   sg.clearRect(0, 0, W, H);
 
-  /* sky */
+  /* Base: the placemat's near-black navy, lifting slightly toward the floor */
   var sky = sg.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, '#02060f'); sky.addColorStop(0.45, '#061426');
-  sky.addColorStop(0.78, '#07203a'); sky.addColorStop(1, '#020814');
+  sky.addColorStop(0, '#01040a');
+  sky.addColorStop(0.42, '#030c18');
+  sky.addColorStop(0.80, '#05172c');
+  sky.addColorStop(1, '#01060e');
   sg.fillStyle = sky; sg.fillRect(0, 0, W, H);
 
-  /* horizon bloom, one per monitor so both screens feel composed */
+  /* One bloom per monitor, so each screen is composed around its own mark */
   for (var p = 0; p < V.panels; p++) {
     var cx = (p + 0.5) * V.panelW - V.OFF;
     if (cx < -V.panelW || cx > W + V.panelW) continue;
-    var gl = sg.createRadialGradient(cx, G - 30, 0, cx, G - 30, V.panelW * 0.62);
-    gl.addColorStop(0, 'rgba(0,140,255,0.20)');
-    gl.addColorStop(0.55, 'rgba(0,90,200,0.07)');
-    gl.addColorStop(1, 'rgba(0,0,0,0)');
-    sg.fillStyle = gl; sg.fillRect(cx - V.panelW * 0.7, 0, V.panelW * 1.4, H);
+    var bl = sg.createRadialGradient(cx, H * 0.46, 0, cx, H * 0.46, V.panelW * 0.6);
+    bl.addColorStop(0, 'rgba(10,120,225,0.20)');
+    bl.addColorStop(0.45, 'rgba(8,80,180,0.09)');
+    bl.addColorStop(1, 'rgba(0,0,0,0)');
+    sg.fillStyle = bl; sg.fillRect(cx - V.panelW * 0.7, 0, V.panelW * 1.4, H);
   }
 
-  var d1 = Math.round(30 * V.U), d2 = Math.round(96 * V.U);
-  dotPattern(sg, d1, V.U, 'rgba(70,150,255,0.13)', -V.OFF % d1, 0);
-  dotPattern(sg, d2, 1.6 * V.U, 'rgba(0,229,255,0.10)', (-V.OFF % d2) + 40, 20 * V.U);
+  hexLattice(G, U);
+  halftoneField(G, U);
 
-  /* faint hex furniture */
-  var r1 = seeded(7);
-  sg.lineWidth = 1;
-  for (var i = 0; i < 10; i++) {
-    var hx = r1() * V.VW - V.OFF, hy = 90 + r1() * (G - 260), hr = (55 + r1() * 110) * V.U;
-    if (hx < -hr * 2 || hx > W + hr * 2) continue;
-    sg.strokeStyle = 'rgba(77,184,255,' + (0.05 + r1() * 0.05).toFixed(3) + ')';
-    hexPath(sg, hx, hy, hr); sg.stroke();
-  }
+  /* fine circuit texture */
+  var d1 = Math.round(34 * U);
+  dotPattern(sg, d1, 0.9 * U, 'rgba(60,140,240,0.10)', -V.OFF % d1, 0);
 
-  /* two parallax skyline bands — dark enough to stay behind desktop icons */
-  paintSkyline(11, G - 4, 0.30, 210 * V.U, '#04101f', 'rgba(90,200,255,0.30)');
-  paintSkyline(29, G - 2, 0.62, 130 * V.U, '#061a30', 'rgba(120,220,255,0.42)');
+  nodeWeb(G, U);
 
-  /* the arena floor the fighters run on = the top edge of the taskbar */
-  var band = 26 * V.U;
+  /* The arena floor the fighters run on = the top edge of the taskbar */
+  var band = 30 * U;
   var fl = sg.createLinearGradient(0, G - band, 0, G + 6);
   fl.addColorStop(0, 'rgba(0,150,255,0)');
-  fl.addColorStop(0.75, 'rgba(0,170,255,0.13)');
+  fl.addColorStop(0.7, 'rgba(0,170,255,0.12)');
   fl.addColorStop(1, 'rgba(120,230,255,0.34)');
   sg.fillStyle = fl; sg.fillRect(0, G - band, W, band + 6);
 
-  sg.fillStyle = 'rgba(0,10,22,0.85)'; sg.fillRect(0, G + 2, W, H - G);
-  sg.fillStyle = 'rgba(150,235,255,0.90)'; sg.fillRect(0, G, W, Math.max(2, Math.round(2 * V.U)));
-  sg.fillStyle = 'rgba(0,200,255,0.30)'; sg.fillRect(0, G + 2 * V.U, W, Math.max(1, Math.round(V.U)));
+  sg.fillStyle = 'rgba(0,7,16,0.9)'; sg.fillRect(0, G + 2, W, H - G);
+  sg.fillStyle = 'rgba(170,240,255,0.95)'; sg.fillRect(0, G, W, Math.max(2, Math.round(2 * U)));
+  sg.fillStyle = 'rgba(0,200,255,0.28)'; sg.fillRect(0, G + 2 * U, W, Math.max(1, Math.round(U)));
 
-  /* tick marks + a seam pip at every monitor boundary */
-  sg.fillStyle = 'rgba(90,200,255,0.16)';
-  var tick = Math.round(64 * V.U);
-  for (var x = -(V.OFF % tick); x < W; x += tick) sg.fillRect(x, G + 5 * V.U, 24 * V.U, Math.max(1, V.U | 0));
+  sg.fillStyle = 'rgba(90,200,255,0.14)';
+  var tick = Math.round(64 * U);
+  for (var x = -(V.OFF % tick); x < W; x += tick) {
+    sg.fillRect(x, G + 5 * U, 24 * U, Math.max(1, U | 0));
+  }
+
+  /* a seam pip at every monitor boundary */
   for (var s2 = 1; s2 < V.panels; s2++) {
     var sx = s2 * V.panelW - V.OFF;
     if (sx < -4 || sx > W + 4) continue;
-    var beam = 150 * V.U;
+    var beam = 170 * U;
     var sm = sg.createLinearGradient(0, G - beam, 0, G);
-    sm.addColorStop(0, 'rgba(0,190,255,0)'); sm.addColorStop(1, 'rgba(0,190,255,0.22)');
-    sg.fillStyle = sm; sg.fillRect(sx - 1, G - beam, Math.max(2, V.U | 0), beam);
+    sm.addColorStop(0, 'rgba(0,190,255,0)'); sm.addColorStop(1, 'rgba(0,190,255,0.20)');
+    sg.fillStyle = sm; sg.fillRect(sx - 1, G - beam, Math.max(2, U | 0), beam);
   }
 }
 
-function paintSkyline(seed, baseY, scale, maxH, fill, lit) {
-  var r = seeded(seed), U = V.U, x = -((V.OFF * scale) % 400) - 400 * U;
-  var span = V.W + 800 * U;
-  sg.save();
-  while (x < span) {
-    var w = (26 + r() * 92) * U, h = (28 * U + r() * maxH) * (0.6 + scale * 0.6);
-    var y = baseY - h;
-    sg.fillStyle = fill; sg.fillRect(x, y, w, h);
-    sg.fillStyle = 'rgba(0,0,0,0.35)'; sg.fillRect(x + w - 3 * U, y, 3 * U, h);
-    if (r() > 0.55) { sg.fillStyle = lit; sg.fillRect(x + w / 2 - 1, y - 9 * U, 2 * U, 9 * U); sg.fillRect(x + w / 2 - 2 * U, y - 12 * U, 4 * U, 3 * U); }
-    var cols = Math.max(1, (w / (11 * U)) | 0), rows = Math.max(1, (h / (14 * U)) | 0);
-    for (var cx = 0; cx < cols; cx++) for (var cy = 0; cy < rows; cy++) {
-      if (r() > 0.86) {
-        sg.fillStyle = r() > 0.7 ? lit : 'rgba(255,196,120,0.28)';
-        sg.fillRect(x + 4 * U + cx * 11 * U, y + 5 * U + cy * 14 * U, 3 * U, 4 * U);
+/* Loose honeycomb of hex outlines — the placemat's signature motif. */
+function hexLattice(G, U) {
+  var R = 92 * U, dx = R * 1.5, dy = R * Math.sqrt(3);
+  var r = seeded(4711);
+  var x0 = -((V.OFF % dx) + dx), cols = Math.ceil((V.W + dx * 2) / dx);
+  sg.lineWidth = Math.max(1, U * 0.9);
+  for (var c = 0; c <= cols; c++) {
+    for (var row = -1; row * dy < V.H + dy; row++) {
+      var hx = x0 + c * dx;
+      var hy = row * dy + (c % 2 ? dy / 2 : 0);
+      var n = r();
+      if (n < 0.55) continue;                       // a lattice, not a grid
+      var fade = Math.max(0, 1 - Math.max(0, hy - G + 120 * U) / (200 * U));
+      var a = (0.07 + n * 0.13) * fade;
+      if (a < 0.012) continue;
+      sg.strokeStyle = 'rgba(58,150,255,' + a.toFixed(3) + ')';
+      hexPath(sg, hx, hy, R * 0.94);
+      sg.stroke();
+      if (n > 0.92) {                               // occasional lit cell
+        sg.fillStyle = 'rgba(0,150,255,' + (0.05 * fade).toFixed(3) + ')';
+        hexPath(sg, hx, hy, R * 0.9); sg.fill();
       }
     }
-    x += w + (10 + r() * 30) * U;
   }
-  sg.restore();
+}
+
+/* Halftone gradients: dot grids whose radius falls off from a focus. */
+function halftoneField(G, U) {
+  var r = seeded(90210);
+  var spacing = 11 * U;
+  /* biased to the panel edges, the way the placemat frames its artwork —
+     the middle of each screen stays clear for desktop icons */
+  var spots = [];
+  for (var p = 0; p < V.panels; p++) {
+    var base = (p + 0.5) * V.panelW - V.OFF;
+    spots.push([base - V.panelW * 0.50, V.H * 0.30, V.panelW * 0.20]);
+    spots.push([base + V.panelW * 0.50, V.H * 0.62, V.panelW * 0.20]);
+    spots.push([base - V.panelW * 0.30, V.H * 0.88, V.panelW * 0.15]);
+    spots.push([base + V.panelW * 0.32, V.H * 0.10, V.panelW * 0.15]);
+  }
+  sg.fillStyle = 'rgba(70,165,255,0.20)';
+  for (var i = 0; i < spots.length; i++) {
+    var cx = spots[i][0], cy = spots[i][1], rad = spots[i][2];
+    if (cx < -rad || cx > V.W + rad) continue;
+    for (var y = cy - rad; y <= cy + rad; y += spacing * 0.87) {
+      var stagger = ((((y - cy) / (spacing * 0.87)) | 0) % 2) * spacing * 0.5;
+      for (var x = cx - rad + stagger; x <= cx + rad; x += spacing) {
+        var ddx = (x - cx) / rad, ddy = (y - cy) / rad;
+        var d = Math.sqrt(ddx * ddx + ddy * ddy);
+        if (d > 1) continue;
+        var rr = (1 - d) * (1 - d) * spacing * 0.32;
+        if (rr < 0.28) continue;
+        if (y > G - 8 * U) continue;                // keep the floor clean
+        sg.beginPath(); sg.arc(x, y, rr, 0, 7); sg.fill();
+      }
+    }
+    void r;
+  }
+}
+
+/* Scattered nodes with short connectors, as on the placemat. */
+function nodeWeb(G, U) {
+  var r = seeded(1337), pts = [];
+  var n = Math.round(V.W / (170 / U));
+  for (var i = 0; i < n; i++) {
+    pts.push([r() * (V.W + 200) - 100, r() * (G - 60 * U)]);
+  }
+  sg.lineWidth = Math.max(1, U * 0.8);
+  for (var a = 0; a < pts.length; a++) {
+    for (var b = a + 1; b < pts.length; b++) {
+      var ddx = pts[a][0] - pts[b][0], ddy = pts[a][1] - pts[b][1];
+      var d = Math.sqrt(ddx * ddx + ddy * ddy);
+      if (d > 190 * U) continue;
+      sg.strokeStyle = 'rgba(60,160,255,' + (0.10 * (1 - d / (190 * U))).toFixed(3) + ')';
+      sg.beginPath(); sg.moveTo(pts[a][0], pts[a][1]); sg.lineTo(pts[b][0], pts[b][1]); sg.stroke();
+    }
+  }
+  for (var k = 0; k < pts.length; k++) {
+    sg.fillStyle = 'rgba(120,205,255,0.30)';
+    sg.beginPath(); sg.arc(pts[k][0], pts[k][1], 1.5 * U, 0, 7); sg.fill();
+  }
 }
 
 /* --------------------------------------------------------------- logo --- */
+
+/* If assets/placemat.(png|jpg|webp|svg) exists at build time it is inlined
+   here as a data URI and used verbatim, centred on each monitor, in place of
+   the drawn lockup. See tools/build.py. Empty otherwise. */
+var PLACEMAT_SRC = '__PLACEMAT_SRC__';
 /* Rendered as DOM/SVG rather than into the canvas: it stays perfectly crisp
    at any DPI and costs nothing per frame.                                   */
 
@@ -831,21 +945,25 @@ function logoSVG(id, w) {
   var h = Math.round(w * 48 / 44);
   return '<svg class="hexwrap" width="' + w + '" height="' + h + '" viewBox="0 0 44 48" aria-hidden="true">' +
     '<defs>' +
-      '<linearGradient id="bg' + id + '" x1="0" y1="0" x2="0.35" y2="1">' +
-        '<stop offset="0" stop-color="#7fe8ff"/><stop offset="0.5" stop-color="#0aa2ff"/>' +
-        '<stop offset="1" stop-color="#0b4bd6"/></linearGradient>' +
-      '<linearGradient id="rg' + id + '" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0" stop-color="#bff2ff"/><stop offset="1" stop-color="#1f8fff"/></linearGradient>' +
+      '<linearGradient id="ring' + id + '" x1="0.1" y1="0" x2="0.9" y2="1">' +
+        '<stop offset="0" stop-color="#ff4d6a"/><stop offset="0.55" stop-color="#e0213f"/>' +
+        '<stop offset="1" stop-color="#9c0f2c"/></linearGradient>' +
+      '<linearGradient id="core' + id + '" x1="0" y1="0" x2="0.2" y2="1">' +
+        '<stop offset="0" stop-color="#7ff2ff"/><stop offset="1" stop-color="#12a8d8"/></linearGradient>' +
+      '<linearGradient id="chev' + id + '" x1="0" y1="0" x2="0" y2="1">' +
+        '<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#5fe0ff"/></linearGradient>' +
     '</defs>' +
-    '<polygon points="22,1.5 42.5,13 42.5,35 22,46.5 1.5,35 1.5,13" fill="rgba(6,20,40,0.55)" ' +
-      'stroke="url(#bg' + id + ')" stroke-width="2.2" stroke-linejoin="round"/>' +
-    '<polygon points="22,6 38,15 38,33 22,42 6,33 6,15" fill="none" ' +
-      'stroke="rgba(127,232,255,0.28)" stroke-width="0.8"/>' +
-    '<circle cx="30.5" cy="14.5" r="2.1" fill="#bff2ff"/>' +
-    '<path d="M8 33 L17 20.5 L21.5 26.5 L28 15 L36 33 Z" fill="rgba(20,120,220,0.35)"/>' +
-    '<polyline points="8,33 17,20.5 21.5,26.5 28,15 36,33" fill="none" stroke="url(#rg' + id + ')" ' +
-      'stroke-width="2.1" stroke-linejoin="round" stroke-linecap="round"/>' +
-    '<polyline points="17,20.5 19,23 21,20.8" fill="none" stroke="rgba(191,242,255,0.65)" stroke-width="1"/>' +
+    /* crimson outer ring */
+    '<polygon points="22,1.6 40.7,12.4 40.7,34 22,44.8 3.3,34 3.3,12.4" fill="rgba(5,14,26,0.55)" ' +
+      'stroke="url(#ring' + id + ')" stroke-width="2.6" stroke-linejoin="round"/>' +
+    /* cyan inner ring */
+    '<polygon points="22,7.6 35.5,15.4 35.5,31 22,38.8 8.5,31 8.5,15.4" fill="none" ' +
+      'stroke="url(#core' + id + ')" stroke-width="1.9" stroke-linejoin="round"/>' +
+    /* upward chevron — the "rydge" */
+    '<polyline points="13.5,28.5 22,17.5 30.5,28.5" fill="none" stroke="url(#chev' + id + ')" ' +
+      'stroke-width="3.1" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<polyline points="17.4,29.6 22,23.6 26.6,29.6" fill="none" stroke="rgba(127,242,255,0.5)" ' +
+      'stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>' +
   '</svg>';
 }
 
@@ -867,6 +985,16 @@ function buildMarks() {
     d.style.top = Math.round(cfg.logoy > 0 ? V.H * cfg.logoy
                                            : Math.min(V.stripTop * 0.62, V.H * 0.42)) + 'px';
     d.style.animationDelay = (p * 0.9) + 's';
+
+    if (PLACEMAT_SRC) {                       // the real artwork, if it was embedded
+      var maxW = Math.min(pw * 0.78, V.W * 0.9);
+      var maxH = V.stripTop * 0.82;
+      d.innerHTML = '<img class="pm" src="' + PLACEMAT_SRC + '" alt="Bluerydge" ' +
+        'style="max-width:' + Math.round(maxW) + 'px;max-height:' + Math.round(maxH) + 'px">';
+      marksEl.appendChild(d);
+      continue;
+    }
+
     d.innerHTML =
       logoSVG(p, Math.round(hexW)) +
       '<div class="word" style="font-size:' + word.toFixed(1) + 'px;letter-spacing:' +
@@ -882,7 +1010,10 @@ function buildMarks() {
 
 /* ---------------------------------------------------------------- sim --- */
 
-var actors = [], projs = [], parts = [], duels = [];
+var actors = [], projs = [], parts = [], duels = [], graves = [];
+
+var GRAVE_LIFE = 30;     // seconds a marker stands before it fades
+var GRAVE_MAX = 10;      // never let the strip fill up with headstones
 var clock = 0, scanT = 0;
 
 var ANIM_CYCLE_ART = 12;      // art px covered by one 8-frame run cycle
@@ -987,16 +1118,34 @@ function tryDuel() {
   }
 }
 
-function endDuel(d) {
+function endDuel(d, noKill) {
   var loser = RNG() < 0.5 ? d.a : d.b;
   [d.a, d.b].forEach(function (f) {
     f.duel = null; f.st = 'run'; f.face = f.dir;
     f.cool = rnd(7, 20); f.atkT = 0;
   });
-  loser.hurt = 0.5; loser.flash = 0.12;
-  loser.vy = -140; loser.y = -0.01;                 // knocked into a short hop
-  burst(loser.x, V.groundY - FEET * V.S * 0.5, 16, [loser.s.c3, '#ffffff'], 1.1);
   var k = duels.indexOf(d); if (k >= 0) duels.splice(k, 1);
+  if (noKill) return;
+
+  /* the loser goes down: knocked back, topples, then leaves a marker */
+  loser.st = 'down';
+  loser.fall = 0;
+  loser.flash = 0.14;
+  loser.hurt = 1;
+  loser.vy = -190; loser.y = -0.01;
+  loser.knock = -loser.face * 46;
+  burst(loser.x, V.groundY - FEET * V.S * 0.5, 22, [loser.s.c3, loser.s.c4, '#ffffff'], 1.2);
+}
+
+function bury(f) {
+  graves.push({
+    x: f.x, t: 0,
+    kind: RNG() < 0.5 ? 0 : 1,          // headstone or cross
+    col: f.s.c3, name: f.s.name,
+    rise: 0
+  });
+  while (graves.length > GRAVE_MAX) graves.shift();
+  burst(f.x, V.groundY - GRAVE_H * V.S * 0.4, 10, [f.s.c3, '#8fa3b8'], 0.55);
 }
 
 function fire(a) {
@@ -1052,6 +1201,14 @@ function stepSim(dt) {
       if (a.x < -margin() || a.x > V.VW + margin()) { actors.splice(i, 1); continue; }
     } else if (a.st === 'duel') {
       a.phase = (a.phase + dt * 1.1) % 1;
+    } else if (a.st === 'down') {
+      a.fall += dt;
+      if (a.fall < 0.45) a.x += a.knock * dt;        // slide back from the blow
+      if (a.fall >= 1.15) {                          // toppled, faded — mark the spot
+        bury(a);
+        actors.splice(i, 1);
+        continue;
+      }
     }
 
     if (a.atkT > 0) {
@@ -1067,7 +1224,7 @@ function stepSim(dt) {
   /* duels */
   for (var d2 = duels.length - 1; d2 >= 0; d2--) {
     var d = duels[d2];
-    if (actors.indexOf(d.a) < 0 || actors.indexOf(d.b) < 0) { endDuel(d); continue; }
+    if (actors.indexOf(d.a) < 0 || actors.indexOf(d.b) < 0) { endDuel(d, true); continue; }
     d.t += dt;
     if (d.over) { if (d.t > d.over) endDuel(d); continue; }
     if (d.t >= d.next) {
@@ -1098,6 +1255,14 @@ function stepSim(dt) {
     if (gone) projs.splice(p, 1);
   }
 
+  /* graves */
+  for (var gi = graves.length - 1; gi >= 0; gi--) {
+    var gv = graves[gi];
+    gv.t += dt;
+    gv.rise = Math.min(1, gv.rise + dt * 3.2);
+    if (gv.t >= GRAVE_LIFE) graves.splice(gi, 1);
+  }
+
   /* particles */
   for (var k2 = parts.length - 1; k2 >= 0; k2--) {
     var pt = parts[k2];
@@ -1115,7 +1280,7 @@ function composeStill(seed) {
   var prev = RNG;
   RNG = seeded(seed * 2654435761 + 12345);
   try {
-    actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0;
+    actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0; graves.length = 0;
 
     var n = Math.max(2, cfg.count);
     var slot = V.VW / n;
@@ -1159,6 +1324,7 @@ function composeStill(seed) {
 
 function frameIndex(a) {
   if (a.flash > 0) return F_FLASH;
+  if (a.st === 'down') return F_HIT;
   if (a.hurt > 0.12 && a.st !== 'duel') return F_HIT;
   if (a.atkT > 0) return F_ATK + Math.min(3, Math.floor((0.36 - a.atkT) / 0.09));
   if (a.st === 'duel') return F_IDLE + (Math.floor(a.phase * 4) % 4);
@@ -1212,9 +1378,65 @@ function draw() {
 
     var fi = frameIndex(f);
     var sheet = f.face > 0 ? sh.right : sh.left;
-    fg.drawImage(sheet, fi * sh.cw, 0, sh.cw, sh.ch,
-                 Math.round(cx - MIDX * V.S), Math.round(cy - FEET * V.S),
-                 V.cellW, V.cellH);
+
+    if (f.st === 'down') {
+      /* topple onto the deck over ~0.55s, then fade out */
+      var tp = Math.min(1, f.fall / 0.55);
+      var ang = (1 - Math.pow(1 - tp, 3)) * Math.PI / 2 * -f.face;
+      fg.save();
+      fg.globalAlpha = Math.max(0, 1 - Math.max(0, f.fall - 0.7) / 0.45);
+      fg.translate(Math.round(cx), Math.round(gy));
+      fg.rotate(ang);
+      fg.drawImage(sheet, fi * sh.cw, 0, sh.cw, sh.ch,
+                   Math.round(-MIDX * V.S), Math.round(-FEET * V.S),
+                   V.cellW, V.cellH);
+      fg.restore();
+      fg.globalAlpha = 1;
+    } else {
+      fg.drawImage(sheet, fi * sh.cw, 0, sh.cw, sh.ch,
+                   Math.round(cx - MIDX * V.S), Math.round(cy - FEET * V.S),
+                   V.cellW, V.cellH);
+    }
+  }
+
+  /* grave markers — they stand for GRAVE_LIFE seconds, then fade */
+  if (graveSheets) {
+    var gw = GRAVE_W * V.S, ghh = GRAVE_H * V.S;
+    var nameFs = Math.max(6, Math.round(2.8 * V.S));
+    for (var g2 = 0; g2 < graves.length; g2++) {
+      var gv = graves[g2], gx = gv.x - OFF;
+      if (gx < -gw || gx > W + gw) continue;
+
+      var out = Math.max(0, Math.min(1, (GRAVE_LIFE - gv.t) / 2));   // fade at the end
+      var up = 1 - Math.pow(1 - gv.rise, 3);                          // rise from the ground
+      if (out <= 0.01) continue;
+
+      fg.globalAlpha = out * 0.45;
+      fg.fillStyle = 'rgba(0,4,10,0.8)';
+      fg.fillRect(gx - gw * 0.4, gy - 1, gw * 0.8, 3);
+      fg.globalCompositeOperation = 'lighter';
+      fg.globalAlpha = out * 0.3;
+      fg.drawImage(glowBlob(gv.col), gx - gw * 0.7, gy - ghh * 0.9, gw * 1.4, ghh * 1.1);
+      fg.globalCompositeOperation = 'source-over';
+
+      /* reveal the top of the marker first, so it reads as rising out of
+         the ground; crop in the sheet's own pixels, not in art units */
+      fg.globalAlpha = out;
+      var sheetG = graveSheets[gv.kind];
+      var srcH = Math.max(1, Math.round(sheetG.height * up));
+      var dstH = Math.max(1, Math.round(ghh * up));
+      fg.drawImage(sheetG, 0, 0, sheetG.width, srcH,
+                   Math.round(gx - gw / 2), Math.round(gy - dstH), gw, dstH);
+
+      if (gv.t < 4.5) {                                              // fallen fighter's name
+        fg.globalAlpha = out * Math.min(1, gv.t / 0.4) * Math.max(0, 1 - (gv.t - 3.2) / 1.3) * 0.8;
+        fg.font = '400 ' + nameFs + "px 'Press Start 2P',monospace";
+        fg.textAlign = 'center';
+        fg.fillStyle = gv.col;
+        fg.fillText(gv.name, gx, gy - ghh - 4 * V.S);
+      }
+    }
+    fg.globalAlpha = 1;
   }
 
   /* projectiles */
@@ -1406,7 +1628,7 @@ if (document.fonts && document.fonts.load) {
   flags.forEach(function (k) {
     document.getElementById('p-' + k).addEventListener('change', function () {
       cfg[k] = this.checked ? 1 : 0; saveCfg(); sync();
-      if (k === 'duels' && !cfg.duels) while (duels.length) endDuel(duels[0]);
+      if (k === 'duels' && !cfg.duels) while (duels.length) endDuel(duels[0], true);
       relayout(false);
     });
   });
@@ -1448,6 +1670,7 @@ try {
     window.__arena = {
       roster: ROSTER, cells: CELLS, art: { w: ART_W, h: ART_H, feet: FEET, midx: MIDX },
       sheets: function () { return sheets; },
+      graves: function () { return graves; },
       view: function () { return V; },
       actors: function () { return actors; }
     };
