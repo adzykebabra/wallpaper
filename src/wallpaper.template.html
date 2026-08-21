@@ -36,6 +36,10 @@ body.idle{cursor:none}
 /* The placemat card does not pulse — it is a large, expensive element and a
    breathing advert is the wrong look besides. */
 .mark.nopulse{animation:none}
+/* the mark lights up while a portal is open through it */
+.mark.flare{filter:brightness(1.5) drop-shadow(0 0 26px rgba(140,235,255,.85))
+  drop-shadow(0 0 60px rgba(0,170,255,.55))}
+.mark{transition:filter .25s ease-out}
 .mark.nopulse.drift{animation:drift 320s steps(1,end) infinite}
 .mark .hexwrap{position:relative;display:block;
   filter:drop-shadow(0 0 14px rgba(224,33,63,.35)) drop-shadow(0 0 22px rgba(0,170,255,.4))}

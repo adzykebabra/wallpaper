@@ -36,6 +36,10 @@ body.idle{cursor:none}
 /* The placemat card does not pulse — it is a large, expensive element and a
    breathing advert is the wrong look besides. */
 .mark.nopulse{animation:none}
+/* the mark lights up while a portal is open through it */
+.mark.flare{filter:brightness(1.5) drop-shadow(0 0 26px rgba(140,235,255,.85))
+  drop-shadow(0 0 60px rgba(0,170,255,.55))}
+.mark{transition:filter .25s ease-out}
 .mark.nopulse.drift{animation:drift 320s steps(1,end) infinite}
 .mark .hexwrap{position:relative;display:block;
   filter:drop-shadow(0 0 14px rgba(224,33,63,.35)) drop-shadow(0 0 22px rgba(0,170,255,.4))}
@@ -187,7 +191,8 @@ var DEFAULTS = {
   fps: 60,        // frame cap
   duels: 1,
   logo: 1,
-  card: 1,        // show the placemat card; 0 falls back to the bare lockup
+  card: 0,        // 1 shows the full placemat card instead of the lockup
+  portal: 1,      // guests arrive through the logo instead of walking on
   grain: 1,
   maxDpr: 2,
   guests: 'endpoint',   // 'endpoint' | 'robohash' | 'pokeapi' | 'off'
@@ -352,6 +357,7 @@ var GUEST_ENDPOINT = '';
 var GUEST_MAX = 24;          // hard ceiling on drafted guests per session
 var GUEST_REFRESH = 1800;    // seconds between manifest polls
 var GUEST_CACHE = 'bluerydge.arena.guests';
+var GUEST_MAX_W = 42;        // art px; the cell is ART_W wide, leave a margin
 
 var ROSTER = [
   { id:'ronin',  name:'RONIN-9',   kind:'humanoid', c1:'#2a6ea8', c2:'#08203a', c3:'#00e5ff', c4:'#dffaff',
@@ -1010,6 +1016,13 @@ function measure() {
   var S = cfg.scale;
   var groundY = Math.max(40, H - cfg.taskbar);
   var stripTop = Math.max(0, Math.round(groundY - (FEET * S + 52)));
+  /* Fix the mark's position from the unadjusted strip first. Deriving it from
+     the adjusted value would be circular: lowering the strip for the portal
+     would move the mark, which would move the strip again. */
+  var markY = Math.round(cfg.logoy > 0 ? H * cfg.logoy
+                                       : Math.min(stripTop * 0.62, H * 0.42));
+  /* The animated layer has to reach the mark, or there is nothing to fall from. */
+  if (cfg.portal && cfg.logo) stripTop = Math.max(0, Math.min(stripTop, markY - 60));
 
   V = {
     W: W, H: H, dpr: dpr, S: S,
@@ -1017,7 +1030,7 @@ function measure() {
     VW: solo ? W * cfg.screens : W,                // virtual span width
     OFF: solo ? cfg.panel * W : 0,                 // virtual x of this window's left edge
     panelW: panelW, panels: cfg.screens,
-    groundY: groundY, stripTop: stripTop, stripH: H - stripTop,
+    groundY: groundY, stripTop: stripTop, stripH: H - stripTop, markY: markY,
     cellW: ART_W * S, cellH: ART_H * S,
     dprInt: Math.max(1, Math.min(3, Math.round(dpr)))
   };
@@ -1320,6 +1333,7 @@ function placematCard(id, cw) {
 
 function buildMarks() {
   marksEl.innerHTML = '';
+  V.marks = [];
   if (!cfg.logo) return;
   for (var p = 0; p < V.panels; p++) {
     var cx = (p + 0.5) * V.panelW - V.OFF;
@@ -1336,8 +1350,7 @@ function buildMarks() {
     var d = document.createElement('div');
     d.className = 'mark' + (cfg.drift ? ' drift' : '');
     d.style.left = Math.round(cx) + 'px';
-    d.style.top = Math.round(cfg.logoy > 0 ? V.H * cfg.logoy
-                                           : Math.min(V.stripTop * 0.62, V.H * 0.42)) + 'px';
+    d.style.top = V.markY + 'px';
     d.style.animationDelay = (p * 0.9) + 's';
 
     if (PLACEMAT_SRC) {                       // the full placemat, if embedded
@@ -1371,11 +1384,32 @@ function buildMarks() {
         (word * 0.07).toFixed(2) + 'px;margin-left:' + gap.toFixed(0) + 'px">BLUERYDGE</div>';
     marksEl.appendChild(d);
   }
+  recordMarks();
+}
+
+/* Anchor points for the portal: the foot of each mark, in virtual coords. */
+function recordMarks() {
+  V.marks = [];
+  for (var i = 0; i < marksEl.children.length; i++) {
+    var el = marksEl.children[i], r = el.getBoundingClientRect();
+    var hex = el.querySelector('.hexwrap');
+    var hr = hex ? hex.getBoundingClientRect() : r;
+    V.marks.push({ el: el,
+      x: hr.left + hr.width / 2 + V.OFF,     // the mark itself is the doorway
+      y: hr.bottom - hr.height * 0.18 });
+  }
+}
+
+/* Flare the mark itself while a portal is open. */
+function flareMark(m, on) {
+  if (!m || !m.el) return;
+  if (on) m.el.classList.add('flare');
+  else m.el.classList.remove('flare');
 }
 
 /* ---------------------------------------------------------------- sim --- */
 
-var actors = [], projs = [], parts = [], duels = [], graves = [];
+var actors = [], projs = [], parts = [], duels = [], graves = [], portals = [];
 
 var GRAVE_LIFE = 30;     // seconds a marker stands before it fades
 var GRAVE_MAX = 10;      // never let the strip fill up with headstones
@@ -1434,6 +1468,24 @@ function margin() { return V.cellW * 2 + 360; }
 
 var lastDir = -1;
 
+/* Guests arrive through the mark: it flares, a column of light opens, and
+   they drop out of it onto the floor line. */
+function portalSpawn(a) {
+  if (!cfg.portal || !V.marks || !V.marks.length) return false;
+  var m = V.marks[(RNG() * V.marks.length) | 0];
+  if (!m) return false;
+  a.st = 'portal';
+  a.pt = 0;
+  a.x = m.x + rnd(-14, 14);
+  a.y = (m.y - V.groundY) + 6;              // above the floor line, at the mark
+  a.vy = 0;
+  a.mark = m;
+  a.face = a.dir;
+  portals.push({ m: m, x: a.x, t: 0, life: 1.5 });
+  flareMark(m, true);
+  return true;
+}
+
 function spawn(initial) {
   /* arrivals alternate, so the few on screen actually run into each other */
   var dir = initial ? (RNG() < 0.5 ? 1 : -1) : (lastDir = -lastDir);
@@ -1442,6 +1494,8 @@ function spawn(initial) {
     : (dir > 0 ? -V.cellW - rnd(0, 300) : V.VW + V.cellW + rnd(0, 300));
   var a = makeActor(dir, x);
   if (initial) a.cool = rnd(4, 20);
+  /* guests step out of the logo; the drawn cast walks on from the edge */
+  if (!initial && a.s.guest) portalSpawn(a);
   actors.push(a);
 }
 
@@ -1567,6 +1621,20 @@ function stepSim(dt) {
       if (a.x < -margin() || a.x > V.VW + margin()) { actors.splice(i, 1); continue; }
     } else if (a.st === 'duel') {
       a.phase = (a.phase + dt * 1.1) % 1;
+    } else if (a.st === 'portal') {
+      a.pt += dt;
+      if (a.pt > 0.32) {                      // hold in the light, then drop
+        a.vy += 1500 * dt;
+        a.y += a.vy * dt;
+      }
+      if (a.y >= 0) {
+        a.y = 0; a.vy = 0; a.st = 'run';
+        a.phase = RNG();
+        a.cool = rnd(2, 6);
+        burst(a.x, V.groundY - 2, 16, [a.s.c3, '#ffffff', '#9fe4ff'], 0.8);
+        flareMark(a.mark, false);
+        a.mark = null;
+      }
     } else if (a.st === 'down') {
       a.fall += dt;
       if (a.fall < 0.45) a.x += a.knock * dt;        // slide back from the blow
@@ -1621,6 +1689,13 @@ function stepSim(dt) {
     if (gone) projs.splice(p, 1);
   }
 
+  /* portals */
+  for (var pi = portals.length - 1; pi >= 0; pi--) {
+    var pv = portals[pi];
+    pv.t += dt;
+    if (pv.t >= pv.life) { flareMark(pv.m, false); portals.splice(pi, 1); }
+  }
+
   /* graves */
   for (var gi = graves.length - 1; gi >= 0; gi--) {
     var gv = graves[gi];
@@ -1646,7 +1721,8 @@ function composeStill(seed) {
   var prev = RNG;
   RNG = seeded(seed * 2654435761 + 12345);
   try {
-    actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0; graves.length = 0;
+    actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0;
+    graves.length = 0; portals.length = 0;
 
     var n = Math.max(2, cfg.count);
     var slot = V.VW / n;
@@ -1717,6 +1793,51 @@ function draw() {
   fg.globalAlpha = 1;
   fg.globalCompositeOperation = 'source-over';
 
+  /* portal light: a column from the mark down to the floor, with a ring at
+     the mouth. Drawn before the fighters so a guest falls through it. */
+  if (portals.length) {
+    fg.globalCompositeOperation = 'lighter';
+    for (var pz = 0; pz < portals.length; pz++) {
+      var pv = portals[pz], px = pv.x - OFF;
+      if (px < -200 || px > W + 200) continue;
+      var open = Math.min(1, pv.t / 0.22);
+      var fade = Math.max(0, 1 - Math.max(0, pv.t - (pv.life - 0.5)) / 0.5);
+      var my = (pv.m.y - top);
+      var colW = (16 + 44 * open) * V.S * 0.5;
+
+      var beam = fg.createLinearGradient(0, my, 0, gy);
+      beam.addColorStop(0, 'rgba(150,235,255,' + (0.5 * fade).toFixed(3) + ')');
+      beam.addColorStop(0.55, 'rgba(60,170,255,' + (0.18 * fade).toFixed(3) + ')');
+      beam.addColorStop(1, 'rgba(40,140,255,0)');
+      fg.fillStyle = beam;
+      fg.beginPath();
+      fg.moveTo(px - colW * 0.5, my);
+      fg.lineTo(px + colW * 0.5, my);
+      fg.lineTo(px + colW * 1.25, gy);
+      fg.lineTo(px - colW * 1.25, gy);
+      fg.closePath();
+      fg.fill();
+
+      fg.globalAlpha = fade;
+      fg.drawImage(glowBlob('#7fe8ff'), px - colW * 1.6, my - colW * 0.7, colW * 3.2, colW * 1.4);
+      fg.globalAlpha = 1;
+
+      /* mouth ring, snapping open then settling */
+      var rw = colW * (1.35 + 0.5 * Math.sin(Math.min(1, pv.t / 0.3) * Math.PI));
+      fg.strokeStyle = 'rgba(190,245,255,' + (0.85 * fade * open).toFixed(3) + ')';
+      fg.lineWidth = Math.max(1.5, 1.6 * V.S);
+      fg.beginPath();
+      fg.ellipse(px, my, rw, rw * 0.3, 0, 0, Math.PI * 2);
+      fg.stroke();
+
+      /* landing pool */
+      fg.globalAlpha = 0.35 * fade;
+      fg.drawImage(glowBlob('#7fe8ff'), px - colW * 1.8, gy - 10 * V.S, colW * 3.6, 20 * V.S);
+      fg.globalAlpha = 1;
+    }
+    fg.globalCompositeOperation = 'source-over';
+  }
+
   /* fighters, far-to-near by travel direction so crossings read cleanly */
   var vis = [];
   for (var n = 0; n < actors.length; n++) {
@@ -1745,7 +1866,18 @@ function draw() {
     var fi = frameIndex(f);
     var sheet = f.face > 0 ? sh.right : sh.left;
 
-    if (f.st === 'down') {
+    if (f.st === 'portal') {
+      var drop = Math.min(1, Math.max(0, (f.pt - 0.32) / 0.35));
+      fg.save();
+      fg.globalAlpha = Math.min(1, f.pt / 0.18);
+      fg.translate(Math.round(cx), Math.round(cy));
+      fg.scale(1 - 0.12 * (1 - drop), 1 + 0.10 * (1 - drop));
+      fg.drawImage(sheet, F_IDLE * sh.cw, 0, sh.cw, sh.ch,
+                   Math.round(-MIDX * V.S), Math.round(-FEET * V.S),
+                   V.cellW, V.cellH);
+      fg.restore();
+      fg.globalAlpha = 1;
+    } else if (f.st === 'down') {
       /* topple onto the deck over ~0.55s, then fade out */
       var tp = Math.min(1, f.fall / 0.55);
       var ang = (1 - Math.pow(1 - tp, 3)) * Math.PI / 2 * -f.face;
@@ -2008,9 +2140,17 @@ function adoptGuest(spec) {
     var ratio = m.sw / m.sh;
     spec.img = img;
     spec.sx0 = m.sx0; spec.sy0 = m.sy0; spec.sw = m.sw; spec.sh = m.sh;
+
+    /* Height is the invariant — every fighter stands the same height on the
+       floor line. Width follows from the trimmed aspect, and only a sprite
+       wider than GUEST_MAX_W relative to its height gets scaled down, which
+       needs a ratio above ~1.5 and did not occur in any source tested. */
     spec.dh = tallest;
-    spec.dw = Math.min(34, tallest * ratio);
-    if (spec.dw >= 34) spec.dh = 34 / ratio;
+    spec.dw = tallest * ratio;
+    if (spec.dw > GUEST_MAX_W) {
+      spec.dw = GUEST_MAX_W;
+      spec.dh = GUEST_MAX_W / ratio;
+    }
     spec.c3 = spec.c3 || m.c3 || '#7fe8ff';
     spec.c1 = spec.c3; spec.c2 = '#0a1420'; spec.c4 = '#ffffff';
     spec.kind = 'guest';
@@ -2298,6 +2438,17 @@ try {
       sheets: function () { return sheets; },
       graves: function () { return graves; },
       sources: SOURCES,
+      portalTest: function () {                 // force a guest through the mark
+        var gi = [];
+        for (var i = 0; i < ROSTER.length; i++) if (ROSTER[i].guest) gi.push(i);
+        if (!gi.length) return false;
+        var a = makeActor(RNG() < 0.5 ? 1 : -1, 0);
+        a.i = gi[(RNG() * gi.length) | 0]; a.s = ROSTER[a.i];
+        a.speed = BASE_SPEED * V.S * a.s.spd;
+        if (!portalSpawn(a)) return false;
+        actors.push(a);
+        return true;
+      },
       probeSource: function (n) {                 // adapter output, without adopting
         var was = cfg.guests; cfg.guests = n;
         return (n === 'robohash' ? robohashRoster(6) : Promise.resolve({ characters: [] }))

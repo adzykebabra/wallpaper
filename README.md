@@ -262,7 +262,7 @@ Every setting is also a URL parameter:
 | `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |
 | `grain`    | `1`     | Scanline overlay |
 | `guests`   | `endpoint` | Guest source: `endpoint`, `robohash`, `pokeapi`, or `off` |
-| `card`     | `1`     | Show the placemat card; `0` falls back to the bare lockup |
+| `card`     | `0`     | `1` shows the full placemat card instead of the lockup |
 | `still`    | `0`     | Non-zero freezes a composed frame, using the value as its seed |
 | `maxDpr`   | `2`     | Device-pixel-ratio ceiling |
 
