@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hosts": ["cdn.bluerydge.com"],
+  "characters": [
+    {
+      "name": "SENTINEL",
+      "sprite": "https://cdn.bluerydge.com/arena/sentinel.png",
+      "color": "#50c8ff",
+      "scale": 1,
+      "speed": 1,
+      "ranged": false
+    },
+    {
+      "name": "WARDEN",
+      "sprite": "https://cdn.bluerydge.com/arena/warden.png",
+      "scale": 1.1,
+      "speed": 0.9,
+      "ranged": true
+    }
+  ]
+}

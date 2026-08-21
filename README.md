@@ -118,6 +118,77 @@ straight away, so there are always four.
 
 Set `?duels=0` if you would rather nobody fought at all.
 
+## Guest fighters
+
+The wallpaper can draft extra fighters from an endpoint you host. **It is off
+unless you configure one** — with no endpoint the file makes no network
+request of any kind, which is verified in the test suite.
+
+Put your URL in `assets/guests-endpoint.txt` (see the `.example` beside it)
+and rebuild. It must be `https://`; `http://localhost:PORT` is accepted for
+local testing and the build prints a warning so a dev build is never shipped
+by accident.
+
+### Manifest
+
+    {
+      "version": 1,
+      "hosts": ["cdn.bluerydge.com"],
+      "characters": [
+        { "name": "SENTINEL",
+          "sprite": "https://cdn.bluerydge.com/arena/sentinel.png",
+          "color": "#50c8ff",
+          "scale": 1, "speed": 1, "ranged": false }
+      ]
+    }
+
+| Field    | Required | Notes |
+|----------|----------|-------|
+| `name`   | yes | Shown on duel plates and gravestones. Trimmed to 14 printable ASCII chars, uppercased |
+| `sprite` | yes | PNG/WebP with transparency, or a `data:` URI. Relative URLs resolve against the endpoint |
+| `color`  | no  | `#rrggbb` glow colour. **Omit it and it is sampled from the sprite's own pixels** |
+| `scale`  | no  | 0.5–1.6, relative to a standard fighter |
+| `speed`  | no  | 0.4–2.0 |
+| `ranged` | no  | Whether they take pot-shots |
+| `hosts`  | no  | Extra hosts sprites may load from, besides the endpoint's own |
+
+Sprites are trimmed of transparent margin so their feet land on the floor
+line, scaled to fighter height, and given a neon halo in their colour.
+Nearest-neighbour is used when upscaling and bilinear when downscaling, so
+pixel art stays crisp and large art stays smooth.
+
+### What it does and doesn't do
+
+Guests are **a single still image**, so they cannot have a real run cycle the
+way the built-in sixteen do — those are drawn skeletons with articulated
+limbs and eighteen baked frames each. Guests get procedural motion instead:
+a bounding hop, squash on the footfall, a little tilt, a lunge to attack.
+At 56 px tall this reads correctly. Everything else treats them identically —
+they enter the shuffled bag, duel, die, and leave a gravestone.
+
+### Behaviour and limits
+
+* Fetched on startup, then re-polled every 30 minutes, and only while the
+  page is visible.
+* The last good roster is cached in `localStorage`, so guests still appear
+  when the machine boots offline.
+* Sprites must be `https` and come from the endpoint's own host or one named
+  in `hosts`. Never plain `http`, except a local dev endpoint pointing at
+  itself.
+* Capped at 24 guests per session. Names are stripped to printable ASCII and
+  are only ever drawn with `fillText` — no manifest value reaches `innerHTML`.
+* Every failure is silent: no endpoint, no network, bad JSON, a dead host, a
+  broken image — you just get the built-in sixteen.
+* Guests are only ever added during a session, never removed, so a mid-session
+  refresh can't shift a fighter out from under itself. Retired guests simply
+  stop being drafted.
+
+Test it without deploying anything:
+
+    node tools/guest-server.js 8777
+    echo "http://localhost:8777/roster.json" > assets/guests-endpoint.txt
+    python3 tools/build.py
+
 ## Settings
 
 Press **H** over the wallpaper for the settings panel — monitors, fighter
@@ -141,6 +212,7 @@ Every setting is also a URL parameter:
 | `logoy`    | `0`     | Logo height as a fraction of the screen; `0` = automatic |
 | `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |
 | `grain`    | `1`     | Scanline overlay |
+| `guests`   | `1`     | Draft guest fighters from the roster endpoint, if one is configured |
 | `still`    | `0`     | Non-zero freezes a composed frame, using the value as its seed |
 | `maxDpr`   | `2`     | Device-pixel-ratio ceiling |
 

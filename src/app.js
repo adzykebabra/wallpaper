@@ -29,6 +29,7 @@ var DEFAULTS = {
   logo: 1,
   grain: 1,
   maxDpr: 2,
+  guests: 1,      // draft guest fighters from GUEST_ENDPOINT, when one is set
   still: 0,       // >0 freezes a composed frame, using this value as the seed
   logoy: 0,       // logo height as a fraction of the screen; 0 = automatic
   drift: 0        // slowly drift the logo — OLED burn-in insurance
@@ -164,6 +165,14 @@ function dot(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
    head   visor helm hood horn crown mask dome wolf bear skull
    wep    blade gun sword bow staff hammer dagger claw scythe cannon fist
    Colours: c1 armour, c2 casing/shadow, c3 neon trim, c4 face/visor light  */
+
+/* Guest roster endpoint. Set at build time from assets/guests-endpoint.txt;
+   empty means the wallpaper never touches the network. See README. */
+var GUEST_ENDPOINT = '__GUEST_ENDPOINT__';
+
+var GUEST_MAX = 24;          // hard ceiling on drafted guests per session
+var GUEST_REFRESH = 1800;    // seconds between manifest polls
+var GUEST_CACHE = 'bluerydge.arena.guests';
 
 var ROSTER = [
   { id:'ronin',  name:'RONIN-9',   kind:'humanoid', c1:'#2a6ea8', c2:'#08203a', c3:'#00e5ff', c4:'#dffaff',
@@ -707,6 +716,84 @@ function glowBlob(color) {
   return (blobCache[color] = c);
 }
 
+/* ---------------------------------------------------------- guest cast --
+   A guest is a single still image, not a drawn skeleton, so it cannot have
+   a real run cycle. It gets procedural motion instead — bob, squash on the
+   footfall, a little tilt — which reads correctly at this size. Everything
+   downstream (duels, defeat, graves, the shuffled bag) treats guests exactly
+   like the built-in sixteen.                                              */
+
+function guestPose(i) {
+  if (i < F_IDLE) {                               // run: a bounding hop
+    var p = i / 8, b = Math.sin(p * Math.PI * 2), land = Math.max(0, -b);
+    return { dx: 0, dy: 0, lift: 2.4 * Math.max(0, b),
+             sx: 1 + land * 0.10, sy: 1 - land * 0.12, rot: b * 0.075 };
+  }
+  if (i < F_ATK) {                                // idle: breathing
+    var q = Math.sin((i - F_IDLE) / 4 * Math.PI * 2);
+    return { dx: 0, dy: 0, lift: 0.5 * Math.max(0, q), sx: 1, sy: 1 + q * 0.02, rot: 0 };
+  }
+  if (i < F_HIT) {                                // attack: wind up, lunge
+    var K = [-0.45, 1, 0.7, 0.2][i - F_ATK];
+    return { dx: K * 5, dy: 0, lift: Math.max(0, K) * 1.5,
+             sx: 1 + K * 0.06, sy: 1 - K * 0.04, rot: K * 0.16 };
+  }
+  return { dx: -3, dy: 0, lift: 0, sx: 1.04, sy: 0.96, rot: -0.22 };   // hit
+}
+
+function paintGuestCell(g, spec, P, K) {
+  g.save();
+  g.setTransform(K, 0, 0, K, 0, 0);
+  g.translate(MIDX + P.dx, FEET + P.dy - P.lift);
+  g.rotate(P.rot);
+  g.scale(P.sx, P.sy);
+  /* Upscaling pixel art with bilinear turns it to mush, and downscaling with
+     nearest drops whole rows. Pick per sprite by which way we're going. */
+  g.imageSmoothingEnabled = (spec.dw * K) < spec.sw * 0.95;
+  g.imageSmoothingQuality = 'high';
+  try {
+    g.drawImage(spec.img, spec.sx0, spec.sy0, spec.sw, spec.sh,
+                -spec.dw / 2, -spec.dh, spec.dw, spec.dh);
+  } catch (e) { /* a broken image must never take the wallpaper down */ }
+  g.restore();
+}
+
+function bakeGuestSheets(spec, K) {
+  var w = ART_W * K, h = ART_H * K;
+  var R = mkCanvas(w * CELLS, h), L = mkCanvas(w * CELLS, h);
+  var gr = ctx2d(R), gl = ctx2d(L);
+
+  for (var i = 0; i < CELLS; i++) {
+    var P = guestPose(i === F_FLASH ? F_HIT : i);
+    var cell = mkCanvas(w, h), g = ctx2d(cell);
+
+    if (CAN_FILTER) {                             // neon halo from the silhouette
+      var sil = mkCanvas(w, h), sgx = ctx2d(sil);
+      paintGuestCell(sgx, spec, P, K);
+      sgx.setTransform(1, 0, 0, 1, 0, 0);
+      sgx.globalCompositeOperation = 'source-in';
+      sgx.fillStyle = spec.c3; sgx.fillRect(0, 0, w, h);
+      g.save();
+      g.filter = 'blur(' + (1.3 * K).toFixed(2) + 'px)';
+      g.globalAlpha = 0.45; g.drawImage(sil, 0, 0);
+      g.globalAlpha = 0.25; g.drawImage(sil, 0, 0);
+      g.restore();
+    }
+
+    paintGuestCell(g, spec, P, K);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (i === F_FLASH) {
+      g.globalCompositeOperation = 'source-atop';
+      g.fillStyle = 'rgba(255,255,255,0.72)';
+      g.fillRect(0, 0, w, h);
+      g.globalCompositeOperation = 'source-over';
+    }
+    gr.drawImage(cell, i * w, 0);
+    gl.save(); gl.translate((i + 1) * w, 0); gl.scale(-1, 1); gl.drawImage(cell, 0, 0); gl.restore();
+  }
+  return { right: R, left: L, cw: w, ch: h };
+}
+
 var sheets = [];            // parallel to ROSTER
 var bakedAt = 0;            // scale the current sheets were baked at
 
@@ -718,7 +805,8 @@ function bakeAll(K, onDone) {
   (function chunk() {
     var t0 = (window.performance || Date).now();
     while (i < ROSTER.length && (window.performance || Date).now() - t0 < 12) {
-      sheets[i] = bakeSheets(ROSTER[i], K); i++;
+      sheets[i] = ROSTER[i].guest ? bakeGuestSheets(ROSTER[i], K) : bakeSheets(ROSTER[i], K);
+      i++;
     }
     if (i < ROSTER.length) requestAnimationFrame(chunk); else onDone();
   })();
@@ -945,25 +1033,23 @@ function logoSVG(id, w) {
   var h = Math.round(w * 48 / 44);
   return '<svg class="hexwrap" width="' + w + '" height="' + h + '" viewBox="0 0 44 48" aria-hidden="true">' +
     '<defs>' +
-      '<linearGradient id="ring' + id + '" x1="0.1" y1="0" x2="0.9" y2="1">' +
-        '<stop offset="0" stop-color="#ff4d6a"/><stop offset="0.55" stop-color="#e0213f"/>' +
-        '<stop offset="1" stop-color="#9c0f2c"/></linearGradient>' +
-      '<linearGradient id="core' + id + '" x1="0" y1="0" x2="0.2" y2="1">' +
-        '<stop offset="0" stop-color="#7ff2ff"/><stop offset="1" stop-color="#12a8d8"/></linearGradient>' +
-      '<linearGradient id="chev' + id + '" x1="0" y1="0" x2="0" y2="1">' +
-        '<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#5fe0ff"/></linearGradient>' +
+      '<linearGradient id="ring' + id + '" x1="0.15" y1="0" x2="0.85" y2="1">' +
+        '<stop offset="0" stop-color="#ff5b74"/><stop offset="0.5" stop-color="#e11d40"/>' +
+        '<stop offset="1" stop-color="#a10f2b"/></linearGradient>' +
+      '<linearGradient id="core' + id + '" x1="0.1" y1="0" x2="0.9" y2="1">' +
+        '<stop offset="0" stop-color="#8df4ff"/><stop offset="1" stop-color="#159fd6"/></linearGradient>' +
     '</defs>' +
     /* crimson outer ring */
-    '<polygon points="22,1.6 40.7,12.4 40.7,34 22,44.8 3.3,34 3.3,12.4" fill="rgba(5,14,26,0.55)" ' +
-      'stroke="url(#ring' + id + ')" stroke-width="2.6" stroke-linejoin="round"/>' +
+    '<polygon points="22,1.8 40.4,12.5 40.4,33.9 22,44.6 3.6,33.9 3.6,12.5" fill="rgba(4,12,24,0.6)" ' +
+      'stroke="url(#ring' + id + ')" stroke-width="3" stroke-linejoin="round"/>' +
     /* cyan inner ring */
-    '<polygon points="22,7.6 35.5,15.4 35.5,31 22,38.8 8.5,31 8.5,15.4" fill="none" ' +
-      'stroke="url(#core' + id + ')" stroke-width="1.9" stroke-linejoin="round"/>' +
-    /* upward chevron — the "rydge" */
-    '<polyline points="13.5,28.5 22,17.5 30.5,28.5" fill="none" stroke="url(#chev' + id + ')" ' +
-      'stroke-width="3.1" stroke-linejoin="round" stroke-linecap="round"/>' +
-    '<polyline points="17.4,29.6 22,23.6 26.6,29.6" fill="none" stroke="rgba(127,242,255,0.5)" ' +
-      'stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<polygon points="22,8.4 34.8,15.8 34.8,30.6 22,38 9.2,30.6 9.2,15.8" fill="none" ' +
+      'stroke="url(#core' + id + ')" stroke-width="2.1" stroke-linejoin="round"/>' +
+    /* the "rydge" — a white chevron rising inside the mark */
+    '<polyline points="14.2,28.2 22,18.2 29.8,28.2" fill="none" stroke="#ffffff" ' +
+      'stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/>' +
+    '<polyline points="18.1,29.2 22,24.2 25.9,29.2" fill="none" stroke="rgba(141,244,255,0.75)" ' +
+      'stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
   '</svg>';
 }
 
@@ -975,9 +1061,12 @@ function buildMarks() {
     if (cx < -V.panelW * 0.5 || cx > V.W + V.panelW * 0.5) continue;
 
     var pw = Math.min(V.panelW, V.W * 1.6);
-    var hexW = Math.max(58, Math.min(340, Math.min(pw * 0.085, V.H * 0.17)));
-    var word = hexW * 0.365;
-    var sub  = hexW * 0.086;
+    /* Size the whole horizontal lockup, then derive its parts from that:
+       hex ~1.62x the cap height, gap ~0.42x, wordmark the rest. */
+    var lock = Math.max(240, Math.min(1400, Math.min(pw * 0.40, V.H * 0.75)));
+    var word = lock / 8.4;
+    var hexW = word * 1.62;
+    var gap  = word * 0.42;
 
     var d = document.createElement('div');
     d.className = 'mark' + (cfg.drift ? ' drift' : '');
@@ -998,12 +1087,7 @@ function buildMarks() {
     d.innerHTML =
       logoSVG(p, Math.round(hexW)) +
       '<div class="word" style="font-size:' + word.toFixed(1) + 'px;letter-spacing:' +
-        (word * 0.30).toFixed(1) + 'px;margin:' + (word * 0.38).toFixed(0) + 'px 0 0 ' +
-        (word * 0.30).toFixed(0) + 'px">BLUERYDGE</div>' +
-      '<div class="rule" style="width:' + Math.round(word * 9.2) + 'px;margin:' +
-        (word * 0.34).toFixed(0) + 'px 0"></div>' +
-      '<div class="sub" style="font-size:' + sub.toFixed(1) + 'px;letter-spacing:' +
-        (sub * 0.42).toFixed(1) + 'px">ARENA</div>';
+        (word * 0.07).toFixed(2) + 'px;margin-left:' + gap.toFixed(0) + 'px">BLUERYDGE</div>';
     marksEl.appendChild(d);
   }
 }
@@ -1026,7 +1110,8 @@ var bag = [], lastDrawn = -1;
 
 function refillBag() {
   bag = [];
-  for (var i = 0; i < ROSTER.length; i++) bag.push(i);
+  for (var i = 0; i < ROSTER.length; i++) if (!ROSTER[i].off) bag.push(i);
+  if (!bag.length) { for (var z = 0; z < ROSTER.length; z++) bag.push(z); }
   for (var j = bag.length - 1; j > 0; j--) {          // Fisher-Yates
     var k = (RNG() * (j + 1)) | 0, t = bag[j]; bag[j] = bag[k]; bag[k] = t;
   }
@@ -1522,6 +1607,197 @@ function start() {
   requestAnimationFrame(loop);
 }
 
+/* --------------------------------------------------- guest endpoint ----- */
+/* Manifest contract (see README):
+     { "hosts": ["cdn.example.com"],            // optional extra sprite hosts
+       "characters": [
+         { "name":"SENTINEL", "sprite":"https://.../sentinel.png",
+           "color":"#00e5ff", "scale":1, "speed":1, "ranged":false } ] }
+
+   Everything here fails silently. No endpoint, no network, bad JSON, a dead
+   host, a broken image — the wallpaper just runs the built-in sixteen.     */
+
+var guestState = { loaded: {}, tries: 0 };
+
+function endpointHost() {
+  try { return new URL(GUEST_ENDPOINT).host; } catch (e) { return ''; }
+}
+
+function isLocal(host) { return host === 'localhost' || host === '127.0.0.1' || host === '[::1]'; }
+
+function spriteAllowed(url, extraHosts) {
+  if (/^data:image\//i.test(url)) return true;
+  var u, base;
+  try { u = new URL(url, GUEST_ENDPOINT); base = new URL(GUEST_ENDPOINT); } catch (e) { return false; }
+  /* plain http only for a local dev endpoint pointing at itself — a remote
+     endpoint can never aim sprite loads at the viewer's own machine */
+  var devLocal = u.protocol === 'http:' && isLocal(u.hostname) && isLocal(base.hostname);
+  if (u.protocol !== 'https:' && !devLocal) return false;
+  if (u.host === endpointHost()) return true;
+  for (var i = 0; i < extraHosts.length; i++) if (u.host === extraHosts[i]) return true;
+  return false;
+}
+
+function cleanName(v) {
+  return String(v == null ? '' : v)
+    .replace(/[^\x20-\x7e]/g, '')                          // drawn with fillText
+    .replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 14);
+}
+
+function normaliseGuest(raw, extraHosts) {
+  if (!raw || typeof raw !== 'object') return null;
+  var name = cleanName(raw.name);
+  var sprite = typeof raw.sprite === 'string' ? raw.sprite : '';
+  if (!name || !sprite || !spriteAllowed(sprite, extraHosts)) return null;
+  var col = /^#[0-9a-f]{6}$/i.test(raw.color || '') ? raw.color : null;
+  var num = function (v, lo, hi, d) {
+    v = parseFloat(v);
+    return (v === v && v >= lo && v <= hi) ? v : d;
+  };
+  return {
+    guest: true, id: 'guest:' + name, name: name,
+    url: new URL(sprite, GUEST_ENDPOINT).href,
+    c3: col, wanted: num(raw.scale, 0.5, 1.6, 1),
+    spd: num(raw.speed, 0.4, 2, 1), ranged: !!raw.ranged
+  };
+}
+
+function loadImage(url) {
+  return new Promise(function (resolve, reject) {
+    var img = new Image();
+    img.crossOrigin = 'anonymous';               // needed to sample its colour
+    var done = false;
+    var timer = setTimeout(function () { if (!done) { done = true; reject(new Error('timeout')); } }, 15000);
+    img.onload = function () { if (!done) { done = true; clearTimeout(timer); resolve(img); } };
+    img.onerror = function () { if (!done) { done = true; clearTimeout(timer); reject(new Error('load')); } };
+    img.src = url;
+  });
+}
+
+/* Trim transparent margin so the sprite's feet land on the floor line, and
+   pick an accent colour from its own pixels. Both need a readable canvas —
+   if the host omitted CORS headers the readback throws and we fall back. */
+function measureSprite(img) {
+  var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+  var box = { sx0: 0, sy0: 0, sw: w, sh: h, c3: null };
+  if (!w || !h) return box;
+  try {
+    var c = mkCanvas(w, h), g = ctx2d(c);
+    g.drawImage(img, 0, 0);
+    var d = g.getImageData(0, 0, w, h).data;
+    var minX = w, minY = h, maxX = -1, maxY = -1;
+    var rs = 0, gs = 0, bs = 0, n = 0;
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var o = (y * w + x) * 4;
+        if (d[o + 3] < 24) continue;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+        var r = d[o], gg = d[o + 1], bb = d[o + 2];
+        var mx = Math.max(r, gg, bb), mn = Math.min(r, gg, bb);
+        if (mx - mn > 40 && mx > 70) { rs += r; gs += gg; bs += bb; n++; }
+      }
+    }
+    if (maxX >= minX && maxY >= minY) {
+      box.sx0 = minX; box.sy0 = minY;
+      box.sw = maxX - minX + 1; box.sh = maxY - minY + 1;
+    }
+    if (n > 12) {
+      var f = 1.5, mxc = Math.max(rs, gs, bs) / n;         // push it toward neon
+      var lift = mxc > 0 ? Math.min(f, 235 / mxc) : 1;
+      box.c3 = '#' + [rs, gs, bs].map(function (v) {
+        var q = Math.round(Math.min(255, (v / n) * lift));
+        return (q < 16 ? '0' : '') + q.toString(16);
+      }).join('');
+    }
+  } catch (e) { /* tainted canvas — keep the full frame and the given colour */ }
+  return box;
+}
+
+function adoptGuest(spec) {
+  if (guestState.loaded[spec.id]) return Promise.resolve(false);
+  if (ROSTER.length >= 16 + GUEST_MAX) return Promise.resolve(false);
+  guestState.loaded[spec.id] = true;
+  return loadImage(spec.url).then(function (img) {
+    var m = measureSprite(img);
+    var tallest = 27 * spec.wanted;
+    var ratio = m.sw / m.sh;
+    spec.img = img;
+    spec.sx0 = m.sx0; spec.sy0 = m.sy0; spec.sw = m.sw; spec.sh = m.sh;
+    spec.dh = tallest;
+    spec.dw = Math.min(34, tallest * ratio);
+    if (spec.dw >= 34) spec.dh = 34 / ratio;
+    spec.c3 = spec.c3 || m.c3 || '#7fe8ff';
+    spec.c1 = spec.c3; spec.c2 = '#0a1420'; spec.c4 = '#ffffff';
+    spec.kind = 'guest';
+
+    ROSTER.push(spec);
+    if (bakedAt) sheets[ROSTER.length - 1] = bakeGuestSheets(spec, bakedAt);
+    refillBag();
+    return true;
+  }, function () {
+    delete guestState.loaded[spec.id];
+    return false;
+  });
+}
+
+function readGuestCache() {
+  try {
+    var raw = JSON.parse(localStorage.getItem(GUEST_CACHE) || 'null');
+    if (raw && raw.url === GUEST_ENDPOINT && Array.isArray(raw.characters)) return raw;
+  } catch (e) {}
+  return null;
+}
+
+function writeGuestCache(hosts, characters) {
+  try {
+    localStorage.setItem(GUEST_CACHE, JSON.stringify({
+      url: GUEST_ENDPOINT, at: Date.now(), hosts: hosts, characters: characters
+    }));
+  } catch (e) { /* quota or private mode — the cache is only a nicety */ }
+}
+
+function ingestManifest(m, cache) {
+  var hosts = [];
+  if (m && Array.isArray(m.hosts)) {
+    for (var h = 0; h < m.hosts.length && h < 8; h++) {
+      if (typeof m.hosts[h] === 'string') hosts.push(m.hosts[h]);
+    }
+  }
+  var raw = (m && Array.isArray(m.characters)) ? m.characters.slice(0, GUEST_MAX) : [];
+  var specs = [], keep = [];
+  for (var i = 0; i < raw.length; i++) {
+    var spec = normaliseGuest(raw[i], hosts);
+    if (spec) { specs.push(spec); keep.push(raw[i]); }
+  }
+  if (cache !== false && specs.length) writeGuestCache(hosts, keep);
+  var chain = Promise.resolve();
+  specs.forEach(function (sp) { chain = chain.then(function () { return adoptGuest(sp); }); });
+  return chain;
+}
+
+function pollGuests() {
+  if (!GUEST_ENDPOINT || !cfg.guests || cfg.still) return;
+  if (typeof fetch !== 'function') return;
+  fetch(GUEST_ENDPOINT, { cache: 'no-cache', credentials: 'omit', mode: 'cors' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(r.status)); })
+    .then(function (m) { return ingestManifest(m, true); })
+    .catch(function (e) {
+      guestState.tries++;
+      if (console && console.warn) console.warn('[arena] guest roster unavailable:', e.message || e);
+    });
+}
+
+function startGuests() {
+  if (!GUEST_ENDPOINT || !cfg.guests || cfg.still) return;
+  var cached = readGuestCache();                  // show last known cast offline
+  if (cached) ingestManifest({ hosts: cached.hosts, characters: cached.characters }, false);
+  pollGuests();
+  setInterval(function () {
+    if (!document.hidden) pollGuests();
+  }, Math.max(300, GUEST_REFRESH) * 1000);
+}
+
 /* ---------------------------------------------------------------- boot -- */
 
 var relayoutT = null;
@@ -1550,6 +1826,7 @@ function ready() {
   }
   seed();
   start();
+  if (!guestState.started) { guestState.started = true; startGuests(); }
 }
 
 function dismissBoot() {
