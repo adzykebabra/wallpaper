@@ -1628,6 +1628,59 @@ function drawFromBag() {
   return (RNG() * ROSTER.length) | 0;
 }
 
+/* Getting past someone coming the other way. Mostly a plain vault, but a
+   fighter will occasionally sprout wings and glide over, or light a thruster
+   and fly the gap, or simply blink past. */
+function startPass(a) {
+  var roll = RNG();
+  var kind = 'vault';
+  if (roll < 0.20) kind = 'glide';
+  else if (roll < 0.36) kind = 'jet';
+  else if (roll < 0.44) kind = 'blink';
+
+  a.pass = { kind: kind, t: 0 };
+  a.y = -0.01;
+
+  if (kind === 'vault') { a.vy = -215; a.grav = 900; }
+  else if (kind === 'glide') { a.vy = -330; a.grav = 900; }
+  else if (kind === 'jet') { a.vy = -150; a.grav = 900; }
+  else { a.vy = 0; a.grav = 0; a.blinkFrom = a.x; }
+}
+
+function stepPass(a, dt) {
+  var P = a.pass;
+  P.t += dt;
+
+  if (P.kind === 'glide') {
+    /* wings snap out at the top of the arc and it floats across */
+    a.grav = (a.vy > -40 && P.t > 0.25) ? 240 : 900;
+    if (a.grav === 240) a.x += a.dir * a.speed * 0.9 * dt;
+  } else if (P.kind === 'jet') {
+    if (P.t < 0.42) {                          // thrust
+      a.vy -= 900 * dt;
+      a.grav = 0;
+      if (parts.length < 220 && RNG() < dt * 55) {
+        parts.push({ x: a.x - a.dir * 3 * V.S + rnd(-2, 2) * V.S,
+                     y: V.groundY + a.y - 4 * V.S,
+                     vx: -a.dir * rnd(20, 70), vy: rnd(40, 130),
+                     life: 0.3, max: 0.3, c: RNG() < 0.5 ? '#ffd28a' : '#8fd8ff', sz: 1 });
+      }
+    } else { a.grav = 620; }
+    a.x += a.dir * a.speed * 0.55 * dt;
+  } else if (P.kind === 'blink') {
+    if (P.t > 0.16 && !P.jumped) {              // gone, then back, past them
+      P.jumped = 1;
+      a.x += a.dir * V.cellW * 1.7;
+      burst(a.blinkFrom, V.groundY - FEET * V.S * 0.5, 8, [a.s.c3, '#ffffff'], 0.5);
+      burst(a.x, V.groundY - FEET * V.S * 0.5, 8, [a.s.c3, '#ffffff'], 0.5);
+    }
+    if (P.t > 0.34) { a.pass = null; a.grav = 900; a.y = 0; a.vy = 0; }
+    return;
+  }
+
+  if (a.y >= 0) { a.pass = null; a.grav = 900; }
+}
+
 function makeActor(dir, x) {
   var i = drawFromBag();
   var s = ROSTER[i];
@@ -1881,7 +1934,12 @@ function stepSim(dt) {
     a.cool -= dt;
     if (a.spooked) a.spooked = Math.max(0, a.spooked - dt);
 
-    if (a.y < 0 || a.vy < 0) { a.vy += 900 * dt; a.y += a.vy * dt; if (a.y >= 0) { a.y = 0; a.vy = 0; } }
+    if (a.pass) stepPass(a, dt);
+    if (a.y < 0 || a.vy < 0) {
+      a.vy += (a.grav === undefined ? 900 : a.grav) * dt;
+      a.y += a.vy * dt;
+      if (a.y >= 0) { a.y = 0; a.vy = 0; a.grav = 900; if (a.pass) a.pass = null; }
+    }
 
     if (a.st === 'run') {
       var dx = a.dir * a.speed * dt * (a.hurt > 0 ? 0.55 : 1);
@@ -1897,11 +1955,11 @@ function stepSim(dt) {
         }
         if (ahead) { fire(a); a.atkT = 0.36; a.struck = true; a.cool = rnd(4, 11); }
       }
-      if (a.dir > 0 && a.y === 0 && a.vy === 0) {
+      if (a.dir > 0 && a.y === 0 && a.vy === 0 && !a.pass) {
         for (var v2 = 0; v2 < actors.length; v2++) {
           var ot = actors[v2];
           if (ot === a || ot.dir === a.dir || ot.st !== 'run') continue;
-          if (Math.abs(ot.x - a.x) < V.cellW * 0.5) { a.vy = -215; a.y = -0.01; break; }
+          if (Math.abs(ot.x - a.x) < V.cellW * 0.7) { startPass(a); break; }
         }
       }
 
@@ -2315,6 +2373,60 @@ function draw() {
     var fi = frameIndex(f);
     var sheet = f.face > 0 ? sh.right : sh.left;
 
+    /* Gear that only exists for the length of a pass, so it is drawn live
+       rather than baked into the sheet. */
+    if (f.pass && f.pass.kind === 'glide') {
+      var open = Math.min(1, Math.max(0, (f.pass.t - 0.12) / 0.18));
+      var flap = Math.sin(f.pass.t * 9) * 0.35;
+      var wy = cy - FEET * V.S * 0.62;
+      fg.save();
+      fg.translate(cx, wy);
+      fg.scale(f.face, 1);
+      fg.globalCompositeOperation = 'lighter';
+      for (var wi = 0; wi < 3; wi++) {
+        var len = (26 - wi * 6) * V.S * open;
+        var lift = (-10 + wi * 7 + flap * 8) * V.S * open;
+        fg.strokeStyle = wi % 2 ? f.s.c4 : '#ffffff';
+        fg.globalAlpha = (0.85 - wi * 0.18) * open;
+        fg.lineWidth = Math.max(1.5, (3 - wi * 0.6) * V.S);
+        fg.beginPath();
+        fg.moveTo(-2 * V.S, 0);
+        fg.quadraticCurveTo(-len * 0.5, lift - 6 * V.S, -len, lift);
+        fg.stroke();
+      }
+      fg.globalCompositeOperation = 'source-over';
+      fg.restore();
+      fg.globalAlpha = 1;
+    } else if (f.pass && f.pass.kind === 'jet') {
+      var thrust = f.pass.t < 0.42 ? 1 : Math.max(0, 1 - (f.pass.t - 0.42) / 0.25);
+      var jx = cx - f.face * 4 * V.S, jy = cy - FEET * V.S * 0.42;
+      fg.fillStyle = mix(f.s.c2, '#ffffff', 0.35);
+      fg.fillRect(jx - 3 * V.S, jy - 5 * V.S, 6 * V.S, 10 * V.S);
+      fg.fillStyle = f.s.c3;
+      fg.fillRect(jx - 3 * V.S, jy - 5 * V.S, 6 * V.S, V.S);
+      if (thrust > 0.02) {
+        fg.globalCompositeOperation = 'lighter';
+        fg.globalAlpha = thrust;
+        var fl = (10 + 7 * Math.sin(clock * 40)) * V.S * thrust;
+        fg.drawImage(glowBlob('#ffb648'), jx - 5 * V.S, jy + 4 * V.S, 10 * V.S, fl);
+        fg.drawImage(glowBlob('#9fe0ff'), jx - 3 * V.S, jy + 4 * V.S, 6 * V.S, fl * 0.6);
+        fg.globalCompositeOperation = 'source-over';
+        fg.globalAlpha = 1;
+      }
+    } else if (f.pass && f.pass.kind === 'blink') {
+      var bt = f.pass.t;
+      fg.globalAlpha = bt < 0.16 ? Math.max(0, 1 - bt / 0.16)
+                                 : Math.min(1, (bt - 0.16) / 0.14);
+      for (var gi2 = 1; gi2 <= 2; gi2++) {       // ghost trail
+        fg.globalAlpha *= 0.55;
+        fg.drawImage(sheet, fi * sh.cw, 0, sh.cw, sh.ch,
+                     Math.round(cx - MIDX * V.S - f.face * gi2 * 9 * V.S),
+                     Math.round(cy - FEET * V.S), V.cellW, V.cellH);
+      }
+      fg.globalAlpha = bt < 0.16 ? Math.max(0, 1 - bt / 0.16)
+                                 : Math.min(1, (bt - 0.16) / 0.14);
+    }
+
     if (f.st === 'portal') {
       var drop = Math.min(1, Math.max(0, (f.pt - 0.32) / 0.35));
       fg.save();
@@ -2343,6 +2455,7 @@ function draw() {
       fg.drawImage(sheet, fi * sh.cw, 0, sh.cw, sh.ch,
                    Math.round(cx - MIDX * V.S), Math.round(cy - FEET * V.S),
                    V.cellW, V.cellH);
+      fg.globalAlpha = 1;
     }
   }
 

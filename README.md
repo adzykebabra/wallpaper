@@ -131,6 +131,21 @@ Meeting head-on does not always mean a fight:
 A grappler always prefers to wrestle. Everyone in a scrap is labelled while it
 lasts, on a backing chip so the name stays readable over any background.
 
+## Getting past each other
+
+Two fighters heading opposite ways do not just clip through. Most of the time
+one vaults, but occasionally something better happens:
+
+| | |
+|---|---|
+| **Vault** | a plain hop over — the common case |
+| **Glide** | wings snap out at the top of the arc and they float across |
+| **Jetpack** | a thruster lights, they fly the gap on an exhaust trail |
+| **Blink** | gone in a puff, back on the other side |
+
+The wings, the pack and the ghost trail only exist for the length of the move,
+so they are drawn live rather than baked into anyone's sprite sheet.
+
 ## Progression
 
 A win is experience, experience is levels, and every level bolts something new
