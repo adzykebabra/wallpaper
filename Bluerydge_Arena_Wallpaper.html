@@ -36,6 +36,19 @@ body.idle{cursor:none}
 .mark .sub{font-family:'Press Start 2P',monospace;color:#5fd0ff;opacity:.62;white-space:nowrap;
   text-shadow:0 0 14px rgba(0,190,255,.5)}
 @keyframes breathe{0%,100%{opacity:.94}50%{opacity:.72}}
+/* Screensaver duty: creep the mark around so it never burns into an OLED.
+   GPU-composited, so it costs nothing per frame. */
+.mark.drift{animation:breathe 7s ease-in-out infinite,drift 320s ease-in-out infinite}
+@keyframes drift{
+  0%,100%{transform:translate(-50%,-50%)}
+  25%{transform:translate(calc(-50% + 38px),calc(-50% - 26px))}
+  50%{transform:translate(calc(-50% - 32px),calc(-50% + 30px))}
+  75%{transform:translate(calc(-50% + 20px),calc(-50% + 16px))}}
+
+/* still mode: kill every animation so an export is byte-deterministic
+   regardless of when the screenshot lands */
+body.still .mark{animation:none;opacity:.92}
+body.still #boot{display:none}
 
 #grade{position:fixed;inset:0;z-index:2;pointer-events:none;
   background:
@@ -78,7 +91,7 @@ body.idle{cursor:none}
   <label><span>Monitors</span><input id="p-screens" type="range" min="1" max="4" step="1"><output id="o-screens"></output></label>
   <label><span>Fighter size</span><input id="p-scale" type="range" min="1" max="5" step="1"><output id="o-scale"></output></label>
   <label><span>Taskbar (px)</span><input id="p-taskbar" type="range" min="0" max="140" step="2"><output id="o-taskbar"></output></label>
-  <label><span>Crowd</span><input id="p-density" type="range" min="0.3" max="2.5" step="0.1"><output id="o-density"></output></label>
+  <label><span>Fighters</span><input id="p-count" type="range" min="1" max="16" step="1"><output id="o-count"></output></label>
   <label><span>Max FPS</span><input id="p-fps" type="range" min="15" max="60" step="5"><output id="o-fps"></output></label>
   <label><span>Duels</span><input id="p-duels" type="checkbox"></label>
   <label><span>Logo</span><input id="p-logo" type="checkbox"></label>
@@ -113,17 +126,22 @@ var DEFAULTS = {
   panel: -1,      // -1 = draw the whole span; 0..n-1 = only that monitor
   scale: 2,       // sprite pixel scale; fighter height = 28 * scale css px
   taskbar: 48,    // px from the bottom of the screen the ground line sits at
-  density: 1,     // crowd multiplier
+  count: 4,       // fighters on screen at once, across the whole span
   fps: 60,        // frame cap
   duels: 1,
   logo: 1,
   grain: 1,
-  maxDpr: 2
+  maxDpr: 2,
+  still: 0,       // >0 freezes a composed frame, using this value as the seed
+  logoy: 0,       // logo height as a fraction of the screen; 0 = automatic
+  drift: 0        // slowly drift the logo — OLED burn-in insurance
 };
-var NUM = { screens: 1, panel: 1, scale: 1, taskbar: 1, density: 1, fps: 1, maxDpr: 1 };
+var NUM = { screens: 1, panel: 1, scale: 1, taskbar: 1, count: 1, fps: 1,
+            maxDpr: 1, still: 1, logoy: 1 };
 var LIMITS = {
   screens: [1, 6], panel: [-1, 5], scale: [1, 5], taskbar: [0, 400],
-  density: [0.2, 4], fps: [10, 144], maxDpr: [1, 3]
+  count: [1, 16], fps: [10, 144], maxDpr: [1, 3],
+  still: [0, 999999], logoy: [0, 0.95]
 };
 
 var cfg = (function () {
@@ -156,6 +174,8 @@ function clampCfg(c) {
   c.screens = Math.round(c.screens);
   c.scale = Math.round(c.scale);
   c.panel = Math.round(c.panel);
+  c.still = Math.round(c.still);
+  c.count = Math.round(c.count);
   if (c.panel >= c.screens) c.panel = -1;
   return c;
 }
@@ -197,8 +217,11 @@ function mix(a, b, t) {
   var b2 = Math.round((x & 255) * (1 - t) + (y & 255) * t);
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b2).toString(16).slice(1);
 }
-function rnd(a, b) { return a + Math.random() * (b - a); }
-function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+/* Swapped for a seeded generator while composing a still, so exporting the
+   same seed twice gives byte-identical output. */
+var RNG = Math.random;
+function rnd(a, b) { return a + RNG() * (b - a); }
+function pick(arr) { return arr[(RNG() * arr.length) | 0]; }
 
 /* Square-capped Bresenham line — the workhorse for pixel-art limbs. */
 function pline(g, x0, y0, x1, y1, w, col) {
@@ -774,6 +797,7 @@ function measure() {
 
   V = {
     W: W, H: H, dpr: dpr, S: S,
+    U: Math.min(2.4, Math.max(0.7, H / 1080)),     // scene scale vs. a 1080p screen
     VW: solo ? W * cfg.screens : W,                // virtual span width
     OFF: solo ? cfg.panel * W : 0,                 // virtual x of this window's left edge
     panelW: panelW, panels: cfg.screens,
@@ -836,64 +860,68 @@ function paintScene() {
     sg.fillStyle = gl; sg.fillRect(cx - V.panelW * 0.7, 0, V.panelW * 1.4, H);
   }
 
-  dotPattern(sg, 30, 1.0, 'rgba(70,150,255,0.13)', -V.OFF % 30, 0);
-  dotPattern(sg, 96, 1.6, 'rgba(0,229,255,0.10)', (-V.OFF % 96) + 40, 20);
+  var d1 = Math.round(30 * V.U), d2 = Math.round(96 * V.U);
+  dotPattern(sg, d1, V.U, 'rgba(70,150,255,0.13)', -V.OFF % d1, 0);
+  dotPattern(sg, d2, 1.6 * V.U, 'rgba(0,229,255,0.10)', (-V.OFF % d2) + 40, 20 * V.U);
 
   /* faint hex furniture */
   var r1 = seeded(7);
   sg.lineWidth = 1;
   for (var i = 0; i < 10; i++) {
-    var hx = r1() * V.VW - V.OFF, hy = 90 + r1() * (G - 260), hr = 55 + r1() * 110;
+    var hx = r1() * V.VW - V.OFF, hy = 90 + r1() * (G - 260), hr = (55 + r1() * 110) * V.U;
     if (hx < -hr * 2 || hx > W + hr * 2) continue;
     sg.strokeStyle = 'rgba(77,184,255,' + (0.05 + r1() * 0.05).toFixed(3) + ')';
     hexPath(sg, hx, hy, hr); sg.stroke();
   }
 
   /* two parallax skyline bands — dark enough to stay behind desktop icons */
-  paintSkyline(11, G - 4, 0.30, 210, '#04101f', 'rgba(90,200,255,0.30)');
-  paintSkyline(29, G - 2, 0.62, 130, '#061a30', 'rgba(120,220,255,0.42)');
+  paintSkyline(11, G - 4, 0.30, 210 * V.U, '#04101f', 'rgba(90,200,255,0.30)');
+  paintSkyline(29, G - 2, 0.62, 130 * V.U, '#061a30', 'rgba(120,220,255,0.42)');
 
   /* the arena floor the fighters run on = the top edge of the taskbar */
-  var fl = sg.createLinearGradient(0, G - 26, 0, G + 6);
+  var band = 26 * V.U;
+  var fl = sg.createLinearGradient(0, G - band, 0, G + 6);
   fl.addColorStop(0, 'rgba(0,150,255,0)');
   fl.addColorStop(0.75, 'rgba(0,170,255,0.13)');
   fl.addColorStop(1, 'rgba(120,230,255,0.34)');
-  sg.fillStyle = fl; sg.fillRect(0, G - 26, W, 32);
+  sg.fillStyle = fl; sg.fillRect(0, G - band, W, band + 6);
 
   sg.fillStyle = 'rgba(0,10,22,0.85)'; sg.fillRect(0, G + 2, W, H - G);
-  sg.fillStyle = 'rgba(150,235,255,0.90)'; sg.fillRect(0, G, W, 2);
-  sg.fillStyle = 'rgba(0,200,255,0.30)'; sg.fillRect(0, G + 2, W, 1);
+  sg.fillStyle = 'rgba(150,235,255,0.90)'; sg.fillRect(0, G, W, Math.max(2, Math.round(2 * V.U)));
+  sg.fillStyle = 'rgba(0,200,255,0.30)'; sg.fillRect(0, G + 2 * V.U, W, Math.max(1, Math.round(V.U)));
 
   /* tick marks + a seam pip at every monitor boundary */
   sg.fillStyle = 'rgba(90,200,255,0.16)';
-  for (var x = -(V.OFF % 64); x < W; x += 64) sg.fillRect(x, G + 5, 24, 1);
+  var tick = Math.round(64 * V.U);
+  for (var x = -(V.OFF % tick); x < W; x += tick) sg.fillRect(x, G + 5 * V.U, 24 * V.U, Math.max(1, V.U | 0));
   for (var s2 = 1; s2 < V.panels; s2++) {
     var sx = s2 * V.panelW - V.OFF;
     if (sx < -4 || sx > W + 4) continue;
-    var sm = sg.createLinearGradient(0, G - 150, 0, G);
+    var beam = 150 * V.U;
+    var sm = sg.createLinearGradient(0, G - beam, 0, G);
     sm.addColorStop(0, 'rgba(0,190,255,0)'); sm.addColorStop(1, 'rgba(0,190,255,0.22)');
-    sg.fillStyle = sm; sg.fillRect(sx - 1, G - 150, 2, 150);
+    sg.fillStyle = sm; sg.fillRect(sx - 1, G - beam, Math.max(2, V.U | 0), beam);
   }
 }
 
 function paintSkyline(seed, baseY, scale, maxH, fill, lit) {
-  var r = seeded(seed), x = -((V.OFF * scale) % 400) - 400;
-  var span = V.W + 800;
+  var r = seeded(seed), U = V.U, x = -((V.OFF * scale) % 400) - 400 * U;
+  var span = V.W + 800 * U;
   sg.save();
   while (x < span) {
-    var w = 26 + r() * 92, h = (28 + r() * maxH) * (0.6 + scale * 0.6);
+    var w = (26 + r() * 92) * U, h = (28 * U + r() * maxH) * (0.6 + scale * 0.6);
     var y = baseY - h;
     sg.fillStyle = fill; sg.fillRect(x, y, w, h);
-    sg.fillStyle = 'rgba(0,0,0,0.35)'; sg.fillRect(x + w - 3, y, 3, h);
-    if (r() > 0.55) { sg.fillStyle = lit; sg.fillRect(x + w / 2 - 1, y - 9, 2, 9); sg.fillRect(x + w / 2 - 2, y - 12, 4, 3); }
-    var cols = Math.max(1, (w / 11) | 0), rows = Math.max(1, (h / 14) | 0);
+    sg.fillStyle = 'rgba(0,0,0,0.35)'; sg.fillRect(x + w - 3 * U, y, 3 * U, h);
+    if (r() > 0.55) { sg.fillStyle = lit; sg.fillRect(x + w / 2 - 1, y - 9 * U, 2 * U, 9 * U); sg.fillRect(x + w / 2 - 2 * U, y - 12 * U, 4 * U, 3 * U); }
+    var cols = Math.max(1, (w / (11 * U)) | 0), rows = Math.max(1, (h / (14 * U)) | 0);
     for (var cx = 0; cx < cols; cx++) for (var cy = 0; cy < rows; cy++) {
       if (r() > 0.86) {
         sg.fillStyle = r() > 0.7 ? lit : 'rgba(255,196,120,0.28)';
-        sg.fillRect(x + 4 + cx * 11, y + 5 + cy * 14, 3, 4);
+        sg.fillRect(x + 4 * U + cx * 11 * U, y + 5 * U + cy * 14 * U, 3 * U, 4 * U);
       }
     }
-    x += w + 10 + r() * 30;
+    x += w + (10 + r() * 30) * U;
   }
   sg.restore();
 }
@@ -932,14 +960,15 @@ function buildMarks() {
     if (cx < -V.panelW * 0.5 || cx > V.W + V.panelW * 0.5) continue;
 
     var pw = Math.min(V.panelW, V.W * 1.6);
-    var hexW = Math.max(58, Math.min(170, pw * 0.085));
-    var word = Math.max(20, Math.min(62, pw * 0.031));
-    var sub  = Math.max(7, Math.min(15, pw * 0.0072));
+    var hexW = Math.max(58, Math.min(340, Math.min(pw * 0.085, V.H * 0.17)));
+    var word = hexW * 0.365;
+    var sub  = hexW * 0.086;
 
     var d = document.createElement('div');
-    d.className = 'mark';
+    d.className = 'mark' + (cfg.drift ? ' drift' : '');
     d.style.left = Math.round(cx) + 'px';
-    d.style.top = Math.round(Math.min(V.stripTop * 0.62, V.H * 0.42)) + 'px';
+    d.style.top = Math.round(cfg.logoy > 0 ? V.H * cfg.logoy
+                                           : Math.min(V.stripTop * 0.62, V.H * 0.42)) + 'px';
     d.style.animationDelay = (p * 0.9) + 's';
     d.innerHTML =
       logoSVG(p, Math.round(hexW)) +
@@ -962,34 +991,58 @@ var clock = 0, scanT = 0;
 var ANIM_CYCLE_ART = 12;      // art px covered by one 8-frame run cycle
 var BASE_SPEED = 52;          // art-px/second before per-fighter multiplier
 
-function makeActor(dir, x) {
-  var i = (Math.random() * ROSTER.length) | 0;
-  for (var tries = 0; tries < 10; tries++) {          // avoid twins on screen
-    var clash = false;
-    for (var n = 0; n < actors.length; n++) if (actors[n].i === i) { clash = true; break; }
-    if (!clash) break;
-    i = (Math.random() * ROSTER.length) | 0;
+/* Draw order is a shuffled bag rather than a coin flip: with only a handful
+   on screen at a time, random picking would keep showing the same faces.
+   This way all sixteen appear before any of them comes round again. */
+var bag = [], lastDrawn = -1;
+
+function refillBag() {
+  bag = [];
+  for (var i = 0; i < ROSTER.length; i++) bag.push(i);
+  for (var j = bag.length - 1; j > 0; j--) {          // Fisher-Yates
+    var k = (RNG() * (j + 1)) | 0, t = bag[j]; bag[j] = bag[k]; bag[k] = t;
   }
+  /* bag.pop() takes from the end — don't let it repeat the previous draw */
+  if (bag[bag.length - 1] === lastDrawn && bag.length > 1) {
+    var sw = bag[bag.length - 1]; bag[bag.length - 1] = bag[0]; bag[0] = sw;
+  }
+}
+
+function drawFromBag() {
+  var held = [];
+  for (var pass = 0; pass <= ROSTER.length; pass++) {
+    if (!bag.length) refillBag();
+    var i = bag.pop(), onScreen = false;
+    for (var n = 0; n < actors.length; n++) if (actors[n].i === i) { onScreen = true; break; }
+    if (!onScreen) { bag = bag.concat(held); lastDrawn = i; return i; }
+    held.push(i);                                     // already out there — skip
+  }
+  bag = bag.concat(held);
+  return (RNG() * ROSTER.length) | 0;
+}
+
+function makeActor(dir, x) {
+  var i = drawFromBag();
   var s = ROSTER[i];
   return {
     i: i, s: s, dir: dir, face: dir,
     x: x, y: 0, vy: 0,
     speed: BASE_SPEED * V.S * s.spd * rnd(0.88, 1.12),
-    phase: Math.random(), st: 'run',
+    phase: RNG(), st: 'run',
     atkT: 0, struck: false, flash: 0, hurt: 0,
     cool: rnd(2, 14), duel: null, exit: false
   };
 }
 
-function wantCount() {
-  var n = Math.round((V.VW / 230) * cfg.density);
-  return Math.max(3, Math.min(30, n));
-}
+function wantCount() { return cfg.count; }
 
 function margin() { return V.cellW * 2 + 360; }
 
+var lastDir = -1;
+
 function spawn(initial) {
-  var dir = Math.random() < 0.5 ? 1 : -1;
+  /* arrivals alternate, so the few on screen actually run into each other */
+  var dir = initial ? (RNG() < 0.5 ? 1 : -1) : (lastDir = -lastDir);
   var x = initial
     ? rnd(0, V.VW)
     : (dir > 0 ? -V.cellW - rnd(0, 300) : V.VW + V.cellW + rnd(0, 300));
@@ -1001,10 +1054,10 @@ function spawn(initial) {
 function burst(x, y, n, cols, power) {
   power = power || 1;
   for (var i = 0; i < n && parts.length < 300; i++) {
-    var ang = Math.random() * Math.PI * 2, sp = (18 + Math.random() * 90) * power;
+    var ang = RNG() * Math.PI * 2, sp = (18 + RNG() * 90) * power;
     parts.push({
       x: x, y: y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 40,
-      life: rnd(0.3, 0.75), max: 0.75, c: pick(cols), sz: Math.random() < 0.3 ? 2 : 1
+      life: rnd(0.3, 0.75), max: 0.75, c: pick(cols), sz: RNG() < 0.3 ? 2 : 1
     });
   }
 }
@@ -1028,7 +1081,7 @@ function tryDuel() {
       if (gap > V.cellW * 1.6 || gap < V.cellW * 0.7) continue;
       var closing = (a.x < b.x && a.dir > 0) || (b.x < a.x && b.dir > 0);
       if (!closing) continue;
-      var d = { a: a, b: b, t: 0, next: 0.35, k: 0, n: 3 + ((Math.random() * 3) | 0), over: 0 };
+      var d = { a: a, b: b, t: 0, next: 0.35, k: 0, n: 3 + ((RNG() * 3) | 0), over: 0 };
       a.duel = b.duel = d; a.st = b.st = 'duel';
       a.face = a.x < b.x ? 1 : -1; b.face = -a.face;
       duels.push(d);
@@ -1038,7 +1091,7 @@ function tryDuel() {
 }
 
 function endDuel(d) {
-  var loser = Math.random() < 0.5 ? d.a : d.b;
+  var loser = RNG() < 0.5 ? d.a : d.b;
   [d.a, d.b].forEach(function (f) {
     f.duel = null; f.st = 'run'; f.face = f.dir;
     f.cool = rnd(7, 20); f.atkT = 0;
@@ -1053,7 +1106,7 @@ function fire(a) {
   var s = a.s;
   projs.push({
     x: a.x + a.face * V.cellW * 0.34, y: V.groundY - FEET * V.S * 0.58,
-    vx: a.face * (330 + Math.random() * 120), dir: a.face,
+    vx: a.face * (330 + RNG() * 120), dir: a.face,
     col: s.c3, hot: s.c4, life: 4, t: 0
   });
   burst(a.x + a.face * V.cellW * 0.34, V.groundY - FEET * V.S * 0.58, 5, [s.c3, s.c4], 0.5);
@@ -1065,7 +1118,7 @@ function stepSim(dt) {
 
   /* population */
   var want = wantCount();
-  if (actors.length < want && Math.random() < dt * 3) spawn(false);
+  if (actors.length < want && RNG() < dt * 3) spawn(false);
 
   scanT -= dt;
   if (scanT <= 0) { scanT = 0.3; tryDuel(); }
@@ -1082,7 +1135,7 @@ function stepSim(dt) {
       var dx = a.dir * a.speed * dt * (a.hurt > 0 ? 0.55 : 1);
       a.x += dx;
       a.phase = (a.phase + Math.abs(dx) / (ANIM_CYCLE_ART * V.S)) % 1;
-      if (s.ranged && a.cool <= 0 && projs.length < 14 && Math.random() < dt * 0.5) {
+      if (s.ranged && a.cool <= 0 && projs.length < 14 && RNG() < dt * 0.5) {
         var ahead = false;
         for (var q = 0; q < actors.length; q++) {
           var o = actors[q];
@@ -1123,7 +1176,7 @@ function stepSim(dt) {
     if (d.t >= d.next) {
       var att = (d.k % 2) ? d.b : d.a;
       att.atkT = 0.36; att.struck = false;
-      if (att.s.ranged && Math.random() < 0.4) fire(att);
+      if (att.s.ranged && RNG() < 0.4) fire(att);
       d.k++; d.next = d.t + 0.52;
       if (d.k >= d.n) d.over = d.t + 0.75;
     }
@@ -1157,6 +1210,52 @@ function stepSim(dt) {
     pt.x += pt.vx * dt; pt.y += pt.vy * dt;
     if (pt.y > GY) { pt.y = GY; pt.vy *= -0.35; pt.vx *= 0.7; }
   }
+}
+
+/* A still is not a random screenshot: fighters are spaced deliberately,
+   given varied strides, and a duel is staged off-centre as a focal point. */
+function composeStill(seed) {
+  var prev = RNG;
+  RNG = seeded(seed * 2654435761 + 12345);
+  try {
+    actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0;
+
+    var n = Math.max(2, cfg.count);
+    var slot = V.VW / n;
+    for (var i = 0; i < n; i++) {
+      var a = makeActor(i % 2 ? -1 : 1, (i + 0.5) * slot + (RNG() - 0.5) * slot * 0.45);
+      a.phase = RNG();
+      a.face = a.dir;
+      actors.push(a);
+    }
+
+    if (cfg.duels && actors.length >= 3) {
+      var j = 1 + ((RNG() * (actors.length - 3)) | 0);
+      var A = actors[j], B = actors[j + 1];
+      var mid = (A.x + B.x) / 2;
+      A.x = mid - V.cellW * 0.48; B.x = mid + V.cellW * 0.48;
+      A.dir = 1; B.dir = -1; A.face = 1; B.face = -1;
+      A.st = B.st = 'duel';
+      A.phase = 0.2; B.phase = 0.6;
+      A.atkT = 0.20;                       // caught at the moment of the strike
+      B.hurt = 0.3;
+      var d = { a: A, b: B, t: 0.9, next: 99, k: 1, n: 4, over: 0 };
+      A.duel = B.duel = d; duels.push(d);
+      burst(mid, V.groundY - FEET * V.S * 0.55, 16, [A.s.c3, A.s.c4, '#ffffff', B.s.c3], 1);
+      for (var k2 = 0; k2 < parts.length; k2++) {   // let the sparks fly outward
+        var pt = parts[k2];
+        pt.x += pt.vx * 0.07; pt.y += pt.vy * 0.07; pt.life *= 0.8;
+      }
+    }
+
+    /* a couple of shots in flight adds depth */
+    for (var r = 0; r < actors.length; r++) {
+      var f = actors[r];
+      if (f.s.ranged && f.st === 'run' && projs.length < 2 && RNG() < 0.5) {
+        fire(f); f.atkT = 0.2;
+      }
+    }
+  } finally { RNG = prev; }
 }
 
 /* ------------------------------------------------------------- render --- */
@@ -1315,10 +1414,29 @@ function relayout(rebake) {
   gradeEl.className = cfg.grain ? '' : 'nogr';
 
   var K = cfg.scale * V.dprInt;
-  if (rebake || K !== bakedAt) {
-    bakeAll(K, function () { seed(); start(); });
-  } else {
-    seed(); start();
+  if (rebake || K !== bakedAt) bakeAll(K, ready);
+  else ready();
+}
+
+function ready() {
+  if (cfg.still) {
+    running = false;
+    document.body.classList.add('still');
+    composeStill(cfg.still);
+    draw();
+    dismissBoot();
+    document.body.classList.add('idle');
+    window.__arenaStill = true;          // export tooling waits on this
+    return;
+  }
+  seed();
+  start();
+}
+
+function dismissBoot() {
+  if (bootEl && !bootEl.classList.contains('gone')) {
+    bootEl.classList.add('gone');
+    setTimeout(function () { if (bootEl.parentNode) bootEl.parentNode.removeChild(bootEl); }, 600);
   }
 }
 
@@ -1332,10 +1450,7 @@ function seed() {
   var want = wantCount();
   while (actors.length > want + 4) actors.pop();
   while (actors.length < want) spawn(true);
-  if (bootEl && !bootEl.classList.contains('gone')) {
-    bootEl.classList.add('gone');
-    setTimeout(function () { if (bootEl.parentNode) bootEl.parentNode.removeChild(bootEl); }, 600);
-  }
+  dismissBoot();
 }
 
 window.addEventListener('resize', function () {
@@ -1346,12 +1461,25 @@ document.addEventListener('visibilitychange', function () {
   if (!document.hidden) { lastT = performance.now(); acc = 0; }
 });
 
-/* fonts must be loaded before the first scene paint or the logo reflows */
-if (document.fonts && document.fonts.ready) {
-  document.fonts.ready.then(function () { relayout(true); }, function () { relayout(true); });
-  setTimeout(function () { if (!running) relayout(true); }, 2500);   // safety net
-} else {
+/* The webfonts are declared font-display:block and are only fetched once
+   something uses them — so document.fonts.ready can resolve before the
+   wordmark's face has loaded, and the logo then reflows after first paint.
+   Request both faces explicitly up front instead. */
+var booted = false;
+function boot() {
+  if (booted) return;
+  booted = true;
   relayout(true);
+}
+
+if (document.fonts && document.fonts.load) {
+  Promise.all([
+    document.fonts.load("700 40px Rajdhani"),
+    document.fonts.load("400 12px 'Press Start 2P'")
+  ]).then(boot, boot);
+  setTimeout(boot, 2500);                       // safety net: never block on fonts
+} else {
+  boot();
 }
 
 /* --------------------------------------------------------------- panel -- */
@@ -1359,14 +1487,14 @@ if (document.fonts && document.fonts.ready) {
 (function panelUI() {
   var el = document.getElementById('panel');
   if (!el) return;
-  var fields = ['screens', 'scale', 'taskbar', 'density', 'fps'];
+  var fields = ['screens', 'scale', 'taskbar', 'count', 'fps'];
   var flags = ['duels', 'logo', 'grain'];
 
   function sync() {
     fields.forEach(function (k) {
       var inp = document.getElementById('p-' + k), out = document.getElementById('o-' + k);
       inp.value = cfg[k];
-      out.textContent = k === 'density' ? cfg[k].toFixed(1) : cfg[k];
+      out.textContent = cfg[k];
     });
     flags.forEach(function (k) { document.getElementById('p-' + k).checked = !!cfg[k]; });
   }

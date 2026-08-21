@@ -36,6 +36,19 @@ body.idle{cursor:none}
 .mark .sub{font-family:'Press Start 2P',monospace;color:#5fd0ff;opacity:.62;white-space:nowrap;
   text-shadow:0 0 14px rgba(0,190,255,.5)}
 @keyframes breathe{0%,100%{opacity:.94}50%{opacity:.72}}
+/* Screensaver duty: creep the mark around so it never burns into an OLED.
+   GPU-composited, so it costs nothing per frame. */
+.mark.drift{animation:breathe 7s ease-in-out infinite,drift 320s ease-in-out infinite}
+@keyframes drift{
+  0%,100%{transform:translate(-50%,-50%)}
+  25%{transform:translate(calc(-50% + 38px),calc(-50% - 26px))}
+  50%{transform:translate(calc(-50% - 32px),calc(-50% + 30px))}
+  75%{transform:translate(calc(-50% + 20px),calc(-50% + 16px))}}
+
+/* still mode: kill every animation so an export is byte-deterministic
+   regardless of when the screenshot lands */
+body.still .mark{animation:none;opacity:.92}
+body.still #boot{display:none}
 
 #grade{position:fixed;inset:0;z-index:2;pointer-events:none;
   background:
@@ -78,7 +91,7 @@ body.idle{cursor:none}
   <label><span>Monitors</span><input id="p-screens" type="range" min="1" max="4" step="1"><output id="o-screens"></output></label>
   <label><span>Fighter size</span><input id="p-scale" type="range" min="1" max="5" step="1"><output id="o-scale"></output></label>
   <label><span>Taskbar (px)</span><input id="p-taskbar" type="range" min="0" max="140" step="2"><output id="o-taskbar"></output></label>
-  <label><span>Crowd</span><input id="p-density" type="range" min="0.3" max="2.5" step="0.1"><output id="o-density"></output></label>
+  <label><span>Fighters</span><input id="p-count" type="range" min="1" max="16" step="1"><output id="o-count"></output></label>
   <label><span>Max FPS</span><input id="p-fps" type="range" min="15" max="60" step="5"><output id="o-fps"></output></label>
   <label><span>Duels</span><input id="p-duels" type="checkbox"></label>
   <label><span>Logo</span><input id="p-logo" type="checkbox"></label>
