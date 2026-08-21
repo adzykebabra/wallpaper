@@ -27,24 +27,80 @@ body.idle{cursor:none}
 #fx{left:0;z-index:3;pointer-events:none}
 
 #marks{position:fixed;inset:0;z-index:1;pointer-events:none}
-/* Horizontal lockup: hex mark on the left, wordmark on the right. */
+/* Horizontal lockup: hex mark on the left, wordmark on the right.
+   will-change gives the mark its own compositor layer, so the opacity pulse
+   and the drift never repaint the artwork underneath them. */
 .mark{position:absolute;display:flex;flex-direction:row;align-items:center;
-  transform:translate(-50%,-50%);animation:breathe 7s ease-in-out infinite}
+  transform:translate(-50%,-50%);animation:breathe 7s ease-in-out infinite;
+  will-change:opacity,transform}
+/* The placemat card does not pulse — it is a large, expensive element and a
+   breathing advert is the wrong look besides. */
+.mark.nopulse{animation:none}
+.mark.nopulse.drift{animation:drift 320s steps(1,end) infinite}
 .mark .hexwrap{position:relative;display:block;
   filter:drop-shadow(0 0 14px rgba(224,33,63,.35)) drop-shadow(0 0 22px rgba(0,170,255,.4))}
 .mark .pm{display:block;width:auto;height:auto;
   filter:drop-shadow(0 10px 40px rgba(0,0,0,.65)) drop-shadow(0 0 60px rgba(0,120,255,.28))}
+/* ── Placemat card ────────────────────────────────────────────────────
+   A reconstruction of the Bluerydge placemat, built from the brand's own
+   elements. Everything is sized in em against the card's own font-size, so
+   the whole thing scales from one number. Drop assets/placemat.* in and this
+   is bypassed entirely in favour of the real artwork. */
+.card{position:relative;display:grid;grid-template-columns:25% 40.5% 34.5%;
+  overflow:hidden;border-radius:.3em;background:#08172a;
+  box-shadow:0 .9em 2.2em rgba(0,0,0,.62),0 0 2.6em rgba(0,110,220,.18);
+  font-family:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif}
+.card>*{position:relative;z-index:1}
+
+.cLogo{display:flex;align-items:center;justify-content:center;gap:.9em;
+  background:linear-gradient(135deg,#0d2440 0%,#07172c 55%,#050f1e 100%)}
+.cLogo .cWord{font-family:Rajdhani,'Segoe UI',sans-serif;font-weight:700;color:#fff;
+  font-size:2.05em;letter-spacing:.02em;line-height:1;white-space:nowrap}
+
+.cCopy{display:flex;flex-direction:column;justify-content:center;padding:0 1.1em 0 1.3em;
+  background:linear-gradient(100deg,#0c2f52 0%,#0a2542 48%,#081c33 100%)}
+.cCopy:before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(70% 90% at 85% 40%,rgba(40,150,230,.20),transparent 70%)}
+.cTag1{color:#fff;font-weight:300;font-size:3.5em;line-height:1.12;letter-spacing:-.015em;
+  white-space:nowrap}
+.cTag2{color:#22d3ee;font-weight:700;font-size:3.62em;line-height:1.12;letter-spacing:-.015em;
+  white-space:nowrap;text-shadow:0 0 .5em rgba(34,211,238,.35)}
+.cBul{display:grid;grid-template-columns:auto auto;column-gap:1.5em;row-gap:.35em;
+  margin-top:1.7em;font-size:1.12em;color:#dbe9f7;font-weight:400;white-space:nowrap}
+.cBul span{display:flex;align-items:center;gap:.6em}
+.cBul i{width:.5em;height:.5em;border-radius:50%;background:#22d3ee;flex:none;
+  box-shadow:0 0 .5em rgba(34,211,238,.8)}
+.cFoot{display:flex;align-items:center;gap:1.5em;margin-top:1.15em;font-size:1.12em;color:#eaf4ff}
+.cFoot span{display:flex;align-items:center;gap:.55em;white-space:nowrap}
+.cFoot svg{width:1.35em;height:1.35em;flex:none}
+
+.cStrips{display:grid;grid-template-columns:.55fr 1fr 1.15fr 1.05fr;gap:.22em;background:#050e1c}
+.cStrips figure{position:relative;overflow:hidden;margin:0}
+.cStrips svg{position:absolute;inset:0;width:100%;height:100%}
+.cBR{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;
+  font-family:'Segoe UI',system-ui,sans-serif;font-weight:800;font-size:7.2em;line-height:1;
+  letter-spacing:.02em;color:rgba(255,255,255,.72);pointer-events:none;
+  text-shadow:0 .04em .3em rgba(0,0,0,.35)}
+
 .mark .word{font-family:Rajdhani,'Segoe UI',sans-serif;font-weight:700;color:#ffffff;
   white-space:nowrap;line-height:1;text-shadow:0 0 26px rgba(120,210,255,.45),0 0 70px rgba(0,120,255,.25)}
 @keyframes breathe{0%,100%{opacity:.94}50%{opacity:.72}}
-/* Screensaver duty: creep the mark around so it never burns into an OLED.
-   GPU-composited, so it costs nothing per frame. */
-.mark.drift{animation:breathe 7s ease-in-out infinite,drift 320s ease-in-out infinite}
+/* Screensaver duty: shift the mark around so it never burns into an OLED.
+   Deliberately stepped, not smooth. A continuous 320s creep moves about a
+   quarter-pixel per second, so nearly every frame recomposites a large layer
+   to the same rounded position — all cost, no movement. Eight discrete jumps
+   protect the panel just as well and composite only eight times. */
+.mark.drift{animation:breathe 7s ease-in-out infinite,drift 320s steps(1,end) infinite}
 @keyframes drift{
-  0%,100%{transform:translate(-50%,-50%)}
-  25%{transform:translate(calc(-50% + 38px),calc(-50% - 26px))}
-  50%{transform:translate(calc(-50% - 32px),calc(-50% + 30px))}
-  75%{transform:translate(calc(-50% + 20px),calc(-50% + 16px))}}
+  0%   {transform:translate(-50%,-50%)}
+  12.5%{transform:translate(calc(-50% + 34px),calc(-50% - 24px))}
+  25%  {transform:translate(calc(-50% + 12px),calc(-50% + 28px))}
+  37.5%{transform:translate(calc(-50% - 30px),calc(-50% + 12px))}
+  50%  {transform:translate(calc(-50% - 18px),calc(-50% - 28px))}
+  62.5%{transform:translate(calc(-50% + 26px),calc(-50% + 6px))}
+  75%  {transform:translate(calc(-50% - 8px),calc(-50% + 30px))}
+  87.5%{transform:translate(calc(-50% + 30px),calc(-50% - 10px))}
+  100% {transform:translate(-50%,-50%)}}
 
 /* still mode: kill every animation so an export is byte-deterministic
    regardless of when the screenshot lands */

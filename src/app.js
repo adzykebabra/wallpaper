@@ -27,9 +27,10 @@ var DEFAULTS = {
   fps: 60,        // frame cap
   duels: 1,
   logo: 1,
+  card: 1,        // show the placemat card; 0 falls back to the bare lockup
   grain: 1,
   maxDpr: 2,
-  guests: 1,      // draft guest fighters from GUEST_ENDPOINT, when one is set
+  guests: 'endpoint',   // 'endpoint' | 'robohash' | 'pokeapi' | 'off'
   still: 0,       // >0 freezes a composed frame, using this value as the seed
   logoy: 0,       // logo height as a fraction of the screen; 0 = automatic
   drift: 0        // slowly drift the logo — OLED burn-in insurance
@@ -40,6 +41,19 @@ var LIMITS = {
   screens: [1, 6], panel: [-1, 5], scale: [1, 5], taskbar: [0, 400],
   count: [1, 16], fps: [10, 144], maxDpr: [1, 3],
   still: [0, 999999], logoy: [0, 0.95]
+};
+
+/* Where guest fighters come from. Only 'endpoint' is on by default, and with
+   no GUEST_ENDPOINT configured that means no network traffic at all.
+
+   The public sources are opt-in via ?guests=<name>. Both were checked for a
+   transparent, full-body sprite and an open CORS policy — without alpha a
+   sprite cannot be trimmed to a common height and just renders as a box. */
+var SOURCES = {
+  off:      { hosts: [] },
+  endpoint: { hosts: [] },
+  robohash: { hosts: ['robohash.org'] },
+  pokeapi:  { hosts: ['pokeapi.co', 'raw.githubusercontent.com'] }
 };
 
 var cfg = (function () {
@@ -57,6 +71,7 @@ var cfg = (function () {
     else if (legacy === 'right') c.panel = 1;
     q.forEach(function (v, key) {
       if (!(key in c)) return;
+      if (key === 'guests') { c[key] = v; return; }
       c[key] = NUM[key] ? parseFloat(v) : (v === '0' || v === 'false' ? 0 : 1);
     });
   } catch (e) {}
@@ -75,6 +90,10 @@ function clampCfg(c) {
   c.still = Math.round(c.still);
   c.count = Math.round(c.count);
   if (c.panel >= c.screens) c.panel = -1;
+  c.guests = String(c.guests);
+  if (c.guests === '1' || c.guests === 'true') c.guests = 'endpoint';
+  if (c.guests === '0' || c.guests === 'false') c.guests = 'off';
+  if (!SOURCES[c.guests]) c.guests = 'endpoint';
   return c;
 }
 
@@ -1058,6 +1077,87 @@ function logoSVG(id, w) {
   '</svg>';
 }
 
+/* A reconstruction of the Bluerydge placemat from the brand's own parts.
+   The photography in the original cannot be recreated, so the right-hand
+   strips are rendered as branded panels with silhouettes. Drop the real file
+   in at assets/placemat.* and this is bypassed entirely. */
+function placematCard(id, cw) {
+  var arrow = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="11" fill="#22d3ee"/>' +
+    '<path d="M10 7l5 5-5 5" fill="none" stroke="#062033" stroke-width="2.6" ' +
+      'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  var bullets = [
+    'Secure Mission Capability', 'Cyber &amp; Technology',
+    'AI &amp; Robotic Integration', 'Research &amp; Development'
+  ].map(function (t) { return '<span><i></i>' + t + '</span>'; }).join('');
+
+  /* stand-ins for the original's photography, in the brand's palette */
+  var strips =
+    '<figure><svg viewBox="0 0 40 120" preserveAspectRatio="xMidYMid slice">' +
+      '<defs><linearGradient id="s1' + id + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#0f2c4c"/><stop offset="1" stop-color="#061424"/></linearGradient></defs>' +
+      '<rect width="40" height="120" fill="url(#s1' + id + ')"/>' +
+      '<g fill="none" stroke="rgba(120,200,255,0.16)" stroke-width="0.7">' +
+      '<path d="M0 30h40M0 60h40M0 90h40"/></g></svg></figure>' +
+
+    '<figure><svg viewBox="0 0 60 120" preserveAspectRatio="xMidYMid slice">' +
+      '<defs><linearGradient id="s2' + id + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#f0b478"/><stop offset="0.45" stop-color="#8a6f6a"/>' +
+      '<stop offset="1" stop-color="#20222e"/></linearGradient></defs>' +
+      '<rect width="60" height="120" fill="url(#s2' + id + ')"/>' +
+      '<g fill="#181a22">' +                                    /* helicopter */
+      '<rect x="20" y="40" width="17" height="6" rx="3"/>' +
+      '<rect x="35" y="41" width="14" height="2"/>' +
+      '<rect x="46" y="37" width="2" height="7"/>' +
+      '<rect x="12" y="36" width="30" height="1.4"/>' +
+      '<rect x="26" y="37" width="2" height="3"/>' +
+      '<rect x="24" y="46" width="9" height="1.2"/></g>' +
+      '<rect y="104" width="60" height="16" fill="#14161e"/></svg></figure>' +
+
+    '<figure><svg viewBox="0 0 70 120" preserveAspectRatio="xMidYMid slice">' +
+      '<defs><linearGradient id="s3' + id + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#caa079"/><stop offset="0.55" stop-color="#7d5f45"/>' +
+      '<stop offset="1" stop-color="#2b2018"/></linearGradient></defs>' +
+      '<rect width="70" height="120" fill="url(#s3' + id + ')"/>' +
+      '<g fill="#241a13">' +                                    /* figure, walking */
+      '<circle cx="35" cy="52" r="5"/>' +
+      '<rect x="30" y="57" width="10" height="20" rx="3"/>' +
+      '<rect x="26" y="59" width="4" height="14" rx="2"/>' +
+      '<rect x="40" y="59" width="4" height="14" rx="2"/>' +
+      '<rect x="30" y="76" width="4" height="18"/>' +
+      '<rect x="36" y="76" width="4" height="18"/></g>' +
+      '<rect y="92" width="70" height="28" fill="#2a1f16"/></svg></figure>' +
+
+    '<figure><svg viewBox="0 0 64 120" preserveAspectRatio="xMidYMid slice">' +
+      '<defs><linearGradient id="s4' + id + '" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#0e5f78"/><stop offset="0.5" stop-color="#0a3d55"/>' +
+      '<stop offset="1" stop-color="#04202f"/></linearGradient></defs>' +
+      '<rect width="64" height="120" fill="url(#s4' + id + ')"/>' +
+      '<g fill="#08222f">' +                                    /* android */
+      '<rect x="26" y="34" width="12" height="14" rx="5"/>' +
+      '<rect x="24" y="50" width="16" height="26" rx="5"/>' +
+      '<rect x="18" y="52" width="5" height="22" rx="2.5"/>' +
+      '<rect x="41" y="52" width="5" height="22" rx="2.5"/>' +
+      '<rect x="26" y="77" width="5" height="26" rx="2"/>' +
+      '<rect x="33" y="77" width="5" height="26" rx="2"/></g>' +
+      '<rect x="29" y="38" width="6" height="2" fill="rgba(140,240,255,0.7)"/></svg></figure>';
+
+  return '<div class="card" style="width:' + Math.round(cw) + 'px;height:' +
+      Math.round(cw / 3.07) + 'px;font-size:' + (cw / 100).toFixed(3) + 'px">' +
+    '<div class="cLogo">' + logoSVG('c' + id, Math.round(cw * 0.052)) +
+      '<div class="cWord">BLUERYDGE</div></div>' +
+    '<div class="cCopy">' +
+      '<div class="cTag1">Protect the Mission,</div>' +
+      '<div class="cTag2">Secure Your Vision</div>' +
+      '<div class="cBul">' + bullets + '</div>' +
+      '<div class="cFoot"><span>' + arrow + 'www.bluerydge.com</span>' +
+        '<span>' + arrow + '1800 CYBERS</span></div>' +
+    '</div>' +
+    '<div class="cStrips">' + strips + '<div class="cBR">BR</div></div>' +
+  '</div>';
+}
+
 function buildMarks() {
   marksEl.innerHTML = '';
   if (!cfg.logo) return;
@@ -1085,6 +1185,14 @@ function buildMarks() {
       var maxH = V.stripTop * 0.82;
       d.innerHTML = '<img class="pm" src="' + PLACEMAT_SRC + '" alt="Bluerydge" ' +
         'style="max-width:' + Math.round(maxW) + 'px;max-height:' + Math.round(maxH) + 'px">';
+      marksEl.appendChild(d);
+      continue;
+    }
+
+    if (cfg.card) {                           // reconstructed placemat card
+      var cardW = Math.min(pw * 0.72, V.W * 0.9, V.stripTop * 0.72 * 3.07);
+      d.className += ' nopulse';
+      d.innerHTML = placematCard(p, cardW);
       marksEl.appendChild(d);
       continue;
     }
@@ -1641,12 +1749,15 @@ function isLocal(host) { return host === 'localhost' || host === '127.0.0.1' || 
 function spriteAllowed(url, extraHosts) {
   if (/^data:image\//i.test(url)) return true;
   var u, base;
-  try { u = new URL(url, GUEST_ENDPOINT); base = new URL(GUEST_ENDPOINT); } catch (e) { return false; }
+  try { u = new URL(url, GUEST_ENDPOINT || location.href); } catch (e) { return false; }
+  try { base = new URL(GUEST_ENDPOINT); } catch (e) { base = { hostname: '' }; }
   /* plain http only for a local dev endpoint pointing at itself — a remote
      endpoint can never aim sprite loads at the viewer's own machine */
   var devLocal = u.protocol === 'http:' && isLocal(u.hostname) && isLocal(base.hostname);
   if (u.protocol !== 'https:' && !devLocal) return false;
   if (u.host === endpointHost()) return true;
+  var src = SOURCES[cfg.guests];
+  if (src) for (var k = 0; k < src.hosts.length; k++) if (u.host === src.hosts[k]) return true;
   for (var i = 0; i < extraHosts.length; i++) if (u.host === extraHosts[i]) return true;
   return false;
 }
@@ -1669,7 +1780,7 @@ function normaliseGuest(raw, extraHosts) {
   };
   return {
     guest: true, id: 'guest:' + name, name: name,
-    url: new URL(sprite, GUEST_ENDPOINT).href,
+    url: new URL(sprite, GUEST_ENDPOINT || location.href).href,
     c3: col, wanted: num(raw.scale, 0.5, 1.6, 1),
     spd: num(raw.speed, 0.4, 2, 1), ranged: !!raw.ranged
   };
@@ -1758,6 +1869,7 @@ function readGuestCache() {
   try {
     var raw = JSON.parse(localStorage.getItem(GUEST_CACHE) || 'null');
     if (raw && raw.url === GUEST_ENDPOINT && Array.isArray(raw.characters)) return raw;
+    return null;
   } catch (e) {}
   return null;
 }
@@ -1789,12 +1901,74 @@ function ingestManifest(m, cache) {
   return chain;
 }
 
+/* ── source: robohash.org ────────────────────────────────────────────────
+   No listing API — every seed string is a distinct character, so the roster
+   is generated client-side and is effectively endless. Sprites are 128x128
+   RGBA with the background left transparent, which is what lets them be
+   trimmed to a common height. Images are CC-BY; credit is in the README. */
+var ROBO_WORDS = ['nova','rift','onyx','vex','kilo','pyre','helix','drift','apex','quill',
+                  'zenith','flux','orbit','ember','cinder','vault','lumen','strider','harrow','koda'];
+
+function robohashRoster(n) {
+  var out = [], used = {};
+  for (var i = 0; i < n * 3 && out.length < n; i++) {
+    var w = ROBO_WORDS[(RNG() * ROBO_WORDS.length) | 0];
+    var seed = w + '-' + (100 + ((RNG() * 900) | 0));
+    if (used[seed]) continue;
+    used[seed] = 1;
+    out.push({
+      name: seed.replace('-', ' '),
+      sprite: 'https://robohash.org/' + encodeURIComponent(seed) +
+              '?set=' + (RNG() < 0.5 ? 'set1' : 'set2') + '&size=160x160',
+      scale: 1, speed: 0.85 + RNG() * 0.5, ranged: RNG() < 0.35
+    });
+  }
+  return Promise.resolve({ characters: out });
+}
+
+/* ── source: pokeapi.co ──────────────────────────────────────────────────
+   96x96 palette PNGs with transparency. Large and varied, but the artwork is
+   Nintendo's — fine on a personal desktop, a real consideration on anything
+   company-branded. Opt-in only, and flagged in the README. */
+function pokeapiRoster(n) {
+  var ids = [], seen = {};
+  while (ids.length < n) {
+    var id = 1 + ((RNG() * 493) | 0);
+    if (!seen[id]) { seen[id] = 1; ids.push(id); }
+  }
+  return Promise.all(ids.map(function (id) {
+    return fetch('https://pokeapi.co/api/v2/pokemon/' + id, { credentials: 'omit', mode: 'cors' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        var sp = j && j.sprites && j.sprites.front_default;
+        return sp ? { name: j.name, sprite: sp, scale: 1,
+                      speed: 0.8 + RNG() * 0.5, ranged: RNG() < 0.3 } : null;
+      })
+      .catch(function () { return null; });
+  })).then(function (list) {
+    return { characters: list.filter(Boolean) };
+  });
+}
+
+function fetchRoster() {
+  var want = Math.min(GUEST_MAX, Math.max(4, cfg.count * 2));
+  if (cfg.guests === 'robohash') return robohashRoster(want);
+  if (cfg.guests === 'pokeapi') return pokeapiRoster(want);
+  return fetch(GUEST_ENDPOINT, { cache: 'no-cache', credentials: 'omit', mode: 'cors' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(r.status)); });
+}
+
+function guestsEnabled() {
+  if (cfg.still || cfg.guests === 'off') return false;
+  if (typeof fetch !== 'function') return false;
+  if (cfg.guests === 'endpoint') return !!GUEST_ENDPOINT;
+  return !!SOURCES[cfg.guests];
+}
+
 function pollGuests() {
-  if (!GUEST_ENDPOINT || !cfg.guests || cfg.still) return;
-  if (typeof fetch !== 'function') return;
-  fetch(GUEST_ENDPOINT, { cache: 'no-cache', credentials: 'omit', mode: 'cors' })
-    .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(r.status)); })
-    .then(function (m) { return ingestManifest(m, true); })
+  if (!guestsEnabled()) return;
+  fetchRoster()
+    .then(function (m) { return ingestManifest(m, cfg.guests === 'endpoint'); })
     .catch(function (e) {
       guestState.tries++;
       if (console && console.warn) console.warn('[arena] guest roster unavailable:', e.message || e);
@@ -1802,9 +1976,11 @@ function pollGuests() {
 }
 
 function startGuests() {
-  if (!GUEST_ENDPOINT || !cfg.guests || cfg.still) return;
-  var cached = readGuestCache();                  // show last known cast offline
-  if (cached) ingestManifest({ hosts: cached.hosts, characters: cached.characters }, false);
+  if (!guestsEnabled()) return;
+  if (cfg.guests === 'endpoint') {
+    var cached = readGuestCache();               // show last known cast offline
+    if (cached) ingestManifest({ hosts: cached.hosts, characters: cached.characters }, false);
+  }
   pollGuests();
   setInterval(function () {
     if (!document.hidden) pollGuests();
@@ -1961,6 +2137,16 @@ try {
       roster: ROSTER, cells: CELLS, art: { w: ART_W, h: ART_H, feet: FEET, midx: MIDX },
       sheets: function () { return sheets; },
       graves: function () { return graves; },
+      sources: SOURCES,
+      probeSource: function (n) {                 // adapter output, without adopting
+        var was = cfg.guests; cfg.guests = n;
+        return (n === 'robohash' ? robohashRoster(6) : Promise.resolve({ characters: [] }))
+          .then(function (m) {
+            var out = (m.characters || []).map(function (c) { return normaliseGuest(c, []); });
+            cfg.guests = was;
+            return out;
+          });
+      },
       view: function () { return V; },
       actors: function () { return actors; }
     };

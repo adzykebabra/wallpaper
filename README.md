@@ -129,9 +129,49 @@ Set `?duels=0` if you would rather nobody fought at all.
 
 ## Guest fighters
 
-The wallpaper can draft extra fighters from an endpoint you host. **It is off
-unless you configure one** — with no endpoint the file makes no network
-request of any kind, which is verified in the test suite.
+The wallpaper can draft extra fighters from a live source. **It does nothing
+unless you ask it to** — the default makes no network request of any kind,
+which is verified in the checks.
+
+    ?guests=robohash    endless procedurally generated robots and monsters
+    ?guests=pokeapi     ~490 creature sprites
+    ?guests=endpoint    your own roster (default; inert until configured)
+    ?guests=off         never touch the network
+
+### Which sources actually work
+
+The constraint is not the API, it is the sprite. To run along the taskbar at a
+uniform height a character needs a **transparent background and a full body** —
+then it can be trimmed to its content and scaled. An opaque portrait renders as
+a floating rectangle. Checked directly:
+
+| Source | Auth | CORS | Sprite | Usable |
+|--------|------|------|--------|--------|
+| [RoboHash](https://robohash.org) | none | `*` | 128px RGBA, transparent, full body | **yes** |
+| [PokéAPI](https://pokeapi.co) | none | `*` | 96px palette PNG with alpha, full body | **yes** |
+| [DiceBear](https://dicebear.com) | none | `*` | transparent SVG, but bust/head only | heads only |
+| [Rick and Morty API](https://rickandmortyapi.com) | none | `*` | **JPEG — no alpha**, opaque portrait | no |
+| Superhero API | key | — | photographic | no |
+
+There is no single "characters from every universe" sprite database with an
+open API and clean licensing — that does not exist. RoboHash is the closest
+thing to endless, because every seed string is a distinct character.
+
+### Licensing, before you ship this
+
+* **RoboHash** images are CC-BY. Free for commercial use **with attribution** —
+  the robot sets are by Zikri Kader, the monsters by Hrvoje Novakovic, and the
+  other sets by Julian Peter Arias and David Revoy. Credit them wherever this
+  wallpaper is distributed.
+* **PokéAPI** serves Nintendo/Game Freak artwork. Fine on your own desktop;
+  putting it on a company-branded wallpaper that clients might see is a
+  trademark and copyright question for someone at Bluerydge to answer, not a
+  technical one. It is opt-in for that reason.
+* For a commercial deployment the clean options are a **CC0 pack**
+  ([Kenney](https://kenney.nl), OpenGameArt filtered to CC0) served from your
+  own host, or artwork you commission — either way via `?guests=endpoint`.
+
+### Your own roster endpoint
 
 Put your URL in `assets/guests-endpoint.txt` (see the `.example` beside it)
 and rebuild. It must be `https://`; `http://localhost:PORT` is accepted for
@@ -221,7 +261,8 @@ Every setting is also a URL parameter:
 | `logoy`    | `0`     | Logo height as a fraction of the screen; `0` = automatic |
 | `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |
 | `grain`    | `1`     | Scanline overlay |
-| `guests`   | `1`     | Draft guest fighters from the roster endpoint, if one is configured |
+| `guests`   | `endpoint` | Guest source: `endpoint`, `robohash`, `pokeapi`, or `off` |
+| `card`     | `1`     | Show the placemat card; `0` falls back to the bare lockup |
 | `still`    | `0`     | Non-zero freezes a composed frame, using the value as its seed |
 | `maxDpr`   | `2`     | Device-pixel-ratio ceiling |
 
