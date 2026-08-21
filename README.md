@@ -16,16 +16,29 @@ lit hut windows at night, a violet cast at dawn and dusk.
 Works fully offline. Fonts and three.js are embedded; with guests off it makes
 no network request at all.
 
-## Setup
+## Setup — spanning two screens
 
-Same as any spanning wallpaper: the default covers two monitors
-(`?screens=3` for three). For engines that drive each display separately, use
-`?screen=left` / `?screen=right` — each instance renders its own slice of the
-same valley, so the scenery lines up across the bezel.
+The wallpaper adapts to whatever window it is given, so spanning is decided
+by **one setting in your wallpaper engine**, not in the file:
 
-In Lively: **+** → drag the file in → choose Web page. Set *Wallpaper input*
-to Desktop so the hotkeys reach it. For the screensaver, Lively's one-time
-`.scr` setup applies (Library → Active Wallpapers → Screensaver).
+**Lively:** Settings → Wallpaper → **Placement → Span across all displays**,
+then apply the wallpaper. Lively then hands it one window covering both
+monitors and the valley runs continuously across them — one sun, one gorge
+(nudged so it never straddles the bezel), fighters and flyovers crossing
+freely. Lively's default placement is *Per display*, which duplicates the
+whole valley on each monitor — if that happens, this is the setting to
+change. The wallpaper detects that situation itself (two displays, window
+only one wide) and shows a one-time note saying exactly this.
+
+Also set *Wallpaper input* to Desktop so the **H**/**L** hotkeys reach it.
+For the screensaver, Lively's one-time `.scr` setup applies (Library →
+Active Wallpapers → Screensaver).
+
+**Engines that can't span** (or if you prefer per-display windows): give
+each monitor its own instance — `?screen=left&seed=7` and
+`?screen=right&seed=7`. Each renders its own slice of the same valley; the
+same `seed` on both is what makes the halves match across the bezel.
+`?panel=0/1/2` extends this to three or more monitors (with `?screens=3`).
 
 The Windows lock screen only takes a still image — pre-rendered stills are in
 `lockscreen/`, or render your own with `node tools/export.js 3440x1440`.

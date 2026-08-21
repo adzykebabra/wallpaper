@@ -74,6 +74,16 @@ body.idle{cursor:none}
 #board .bar i{display:block;height:100%;border-radius:2px}
 #board .empty{opacity:.55;padding:6px 0}
 
+#spanhint{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:10;
+  max-width:520px;font:13px/1.55 'Segoe UI',system-ui,sans-serif;color:#eaf4ff;
+  background:rgba(8,18,32,.95);border:1px solid rgba(120,190,255,.4);border-radius:10px;
+  padding:12px 16px;box-shadow:0 10px 36px rgba(0,0,0,.55)}
+#spanhint code{font-family:ui-monospace,monospace;background:rgba(120,190,255,.15);
+  padding:0 4px;border-radius:4px}
+#spanhint button{display:block;margin-top:8px;font:inherit;color:#eaf4ff;cursor:pointer;
+  background:rgba(80,150,255,.25);border:1px solid rgba(120,190,255,.5);border-radius:6px;
+  padding:4px 12px}
+
 #boot{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
   background:#020409;font:400 11px/1.6 'Press Start 2P',monospace;color:#3d7fa8;
   transition:opacity .45s ease}

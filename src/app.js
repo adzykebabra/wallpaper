@@ -1156,10 +1156,22 @@ var LAYOUT = null;
 function layout() {
   if (LAYOUT && LAYOUT.seed === cfg.seed) return LAYOUT;
   var r = wseed(1);
+  var g = 0.40 + r() * 0.20;            // the falls wander around mid-span
+  var mirror = r() < 0.5;               // half of all valleys run village→forest
+  /* Keep the gorge clear of monitor seams: a waterfall split across a bezel
+     looks broken. Nudge its on-screen position away from every boundary. */
+  var eff = mirror ? 1 - g : g;
+  for (var b = 1; b < cfg.screens; b++) {
+    var seam = b / cfg.screens;
+    if (Math.abs(eff - seam) < 0.06) {
+      eff = seam + (eff >= seam ? 0.06 : -0.06);
+    }
+  }
+  eff = Math.max(0.12, Math.min(0.88, eff));
   LAYOUT = {
     seed: cfg.seed,
-    gorgeU: 0.40 + r() * 0.20,          // the falls wander around mid-span
-    mirror: r() < 0.5,                  // half of all valleys run village→forest
+    gorgeU: mirror ? 1 - eff : eff,
+    mirror: mirror,
     huts: 6 + (r() * 6) | 0,
     giants: 4 + (r() * 4) | 0
   };
@@ -3826,7 +3838,11 @@ function ready() {
   }
   seed();
   start();
-  if (!guestState.started) { guestState.started = true; startGuests(); }
+  if (!guestState.started) {
+    guestState.started = true;
+    startGuests();
+    spanCheck();
+  }
 }
 
 function dismissBoot() {
@@ -3912,6 +3928,36 @@ function renderBoard() {
       '<div class="bar"><i style="width:' + Math.round(frac * 100) + '%;background:' + sp.c3 + '"></i></div>';
   }
   rows.innerHTML = html;
+}
+
+/* ---------------------------------------------------------- span check -- */
+/* Chromium reports whether this machine has more than one display. If it
+   does, and we are in span mode but our window is only one display wide,
+   the engine is almost certainly duplicating the wallpaper per monitor
+   rather than spanning it. Explain the one setting that fixes it, once. */
+function spanCheck() {
+  try {
+    if (cfg.panel >= 0 || cfg.still) return;          // per-monitor mode is deliberate
+    if (localStorage.getItem('arena.wallpaper.spanhint') === 'off') return;
+    if (!window.screen || screen.isExtended !== true) return;
+    if (window.innerWidth > screen.width * 1.2) return;   // already spanning
+
+    var d = document.createElement('div');
+    d.id = 'spanhint';
+    d.innerHTML =
+      '<b>Two displays detected, but this window covers only one.</b><br>' +
+      'To run the valley across both screens, set your wallpaper engine to span: ' +
+      'in Lively, <i>Settings &rarr; Wallpaper &rarr; Placement &rarr; Span across all displays</i>. ' +
+      'Or give each monitor its own instance with <code>?screen=left</code> and ' +
+      '<code>?screen=right</code> plus the same <code>?seed=</code>.' +
+      '<button id="spanhint-x">Got it</button>';
+    document.body.appendChild(d);
+    document.getElementById('spanhint-x').addEventListener('click', function () {
+      try { localStorage.setItem('arena.wallpaper.spanhint', 'off'); } catch (e) {}
+      d.remove();
+    });
+    setTimeout(function () { if (d.parentNode) d.remove(); }, 45000);
+  } catch (e) { /* detection is a courtesy, never a failure */ }
 }
 
 /* --------------------------------------------------------------- panel -- */
@@ -4019,6 +4065,7 @@ try {
       sources: SOURCES,
       award: awardXP,
       forceRaid: function () { spawnRaid(); },
+      layoutInfo: function () { return layout(); },
       spawnFlyer: function (kind) {
         flyers.push({ kind: kind, x: -200, y: V.H * 0.15, vx: V.H * 0.35,
                       t: 0, flap: 0, dropX: V.VW * 0.45, dropped: false });
