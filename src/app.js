@@ -1,5 +1,5 @@
 /* ============================================================================
-   BLUERYDGE ARENA — dual-monitor animated wallpaper
+   PORTAL VALLEY — dual-monitor animated wallpaper
    Standalone, dependency-free, offline. No frameworks, no network.
 
    Design notes
@@ -26,25 +26,24 @@ var DEFAULTS = {
   count: 4,       // fighters on screen at once, across the whole span
   fps: 60,        // frame cap
   duels: 1,
-  logo: 1,
-  card: 0,        // 1 shows the full placemat card instead of the lockup
-  portal: 1,      // guests arrive through the logo instead of walking on
+  raids: 1,       // monsters crawl out of the forest; heroes unite against them
+  portal: 1,      // arrivals drop from the sky portal instead of walking on
   levels: 1,      // fighters gain experience, kit and evolutions from wins
-  ambient: 1,     // the scene drifts with the time of day
+  ambient: 1,     // real time of day drives the sky and the portal
+  hour: -1,       // override the clock (0-23.99); -1 = use the real time
   seedxp: 0,      // preview switch: start every fighter with this much record
-  grain: 1,
+  grain: 0,       // scanlines suit a cyber scene; off for the valley
   maxDpr: 2,
   guests: 'mix',        // 'mix' | 'robohash' | 'pokeapi' | 'endpoint' | 'off'
-  still: 0,       // >0 freezes a composed frame, using this value as the seed
-  logoy: 0,       // logo height as a fraction of the screen; 0 = automatic
-  drift: 0        // slowly drift the logo — OLED burn-in insurance
+  seed: 0,        // world seed; 0 rolls one on first run and keeps it
+  still: 0        // >0 freezes a composed frame, using this value as the seed
 };
 var NUM = { screens: 1, panel: 1, scale: 1, taskbar: 1, count: 1, fps: 1,
-            maxDpr: 1, still: 1, logoy: 1, seedxp: 1 };
+            maxDpr: 1, still: 1, seedxp: 1, hour: 1, seed: 1 };
 var LIMITS = {
   screens: [1, 6], panel: [-1, 5], scale: [1, 5], taskbar: [0, 400],
   count: [1, 16], fps: [10, 144], maxDpr: [1, 3], seedxp: [0, 400],
-  still: [0, 999999], logoy: [0, 0.95]
+  still: [0, 999999], hour: [-1, 23.99], seed: [0, 999999]
 };
 
 /* Where guest fighters come from. Only 'endpoint' is on by default, and with
@@ -65,7 +64,7 @@ var cfg = (function () {
   var c = {}, k;
   for (k in DEFAULTS) c[k] = DEFAULTS[k];
   try {
-    var saved = JSON.parse(localStorage.getItem('bluerydge.arena') || '{}');
+    var saved = JSON.parse(localStorage.getItem('arena.wallpaper.cfg') || '{}');
     for (k in saved) if (k in c) c[k] = saved[k];
   } catch (e) { /* private mode / disabled storage — defaults are fine */ }
   try {
@@ -80,7 +79,12 @@ var cfg = (function () {
       c[key] = NUM[key] ? parseFloat(v) : (v === '0' || v === 'false' ? 0 : 1);
     });
   } catch (e) {}
-  return clampCfg(c);
+  c = clampCfg(c);
+  if (!c.seed) {                       // roll this machine's valley once
+    c.seed = 1 + ((Math.random() * 999998) | 0);
+    try { localStorage.setItem('arena.wallpaper.cfg', JSON.stringify(c)); } catch (e) {}
+  }
+  return c;
 })();
 
 function clampCfg(c) {
@@ -104,7 +108,7 @@ function clampCfg(c) {
 }
 
 function saveCfg() {
-  try { localStorage.setItem('bluerydge.arena', JSON.stringify(cfg)); } catch (e) {}
+  try { localStorage.setItem('arena.wallpaper.cfg', JSON.stringify(cfg)); } catch (e) {}
 }
 
 /* A wallpaper must never show a red error box. Log and carry on. */
@@ -197,7 +201,7 @@ var GUEST_ENDPOINT = '__GUEST_ENDPOINT__';
 
 var GUEST_MAX = 40;          // hard ceiling on drafted guests per session
 var GUEST_REFRESH = 1800;    // seconds between manifest polls
-var GUEST_CACHE = 'bluerydge.arena.guests';
+var GUEST_CACHE = 'arena.wallpaper.guests';
 var GUEST_MAX_W = 42;        // art px; the cell is ART_W wide, leave a margin
 
 var ROSTER = [
@@ -254,7 +258,45 @@ var ROSTER = [
   { id:'ferro',  name:'FERRO',     kind:'hover',    c1:'#8e2f6f', c2:'#2a0c22', c3:'#ff7fd8', c4:'#ffe3f6',
     head:'dome',   wep:'cannon', ranged:1, spd:0.9, challenger:1 },
   { id:'nightstep',name:'NIGHTSTEP',kind:'humanoid',c1:'#3a2a6e', c2:'#120a26', c3:'#7d5cff', c4:'#d8ccff',
-    head:'hood',   wep:'dagger', cape:1, ranged:0, spd:1.42, challenger:1 }
+    head:'hood',   wep:'dagger', cape:1, ranged:0, spd:1.42, challenger:1 },
+
+  /* ── the hero wing. STARDUST and BLACK TERROR are real public-domain
+     characters — golden-age heroes from defunct 1940s publishers (Fox
+     Features and Nedor), whose original characters belong to everyone now;
+     these are my own pixel renditions of them. The other four are originals
+     on modern super-archetypes — the armored inventor, the gamma brute, the
+     storm god, the spider acrobat — with move sets to match: the inventor
+     jets over traffic, the acrobat blinks, the brute and the god hit like
+     falling masonry, and the two casters strike with their element.        */
+  { id:'forge',   name:'FORGE-1',  kind:'humanoid', c1:'#b02a20', c2:'#3a0d08', c3:'#ffd24d', c4:'#fff2c0',
+    head:'visor',  wep:'fist',   ranged:1, spd:1.0, hero:1, passPref:'jet',
+    elem: { cols: ['#ffd24d', '#fff2c0', '#ffffff'], n: 12 } },
+  { id:'rampage', name:'RAMPAGE',  kind:'humanoid', c1:'#3f9e3f', c2:'#12300f', c3:'#8aff5e', c4:'#e0ffc9',
+    head:'mask',   wep:'fist',   ranged:0, spd:0.72, heavy:1, bulk:1, grow:1.14, hero:1 },
+  { id:'stormhammer', name:'STORMHAMMER', kind:'humanoid', c1:'#7a8ba8', c2:'#232c3d', c3:'#8ad8ff', c4:'#ffffff',
+    head:'helm',   wep:'hammer', cape:1, ranged:1, spd:0.88, heavy:1, hero:1,
+    elem: { cols: ['#ffe25e', '#8ad8ff', '#ffffff'], n: 16 } },
+  { id:'arachne', name:'ARACHNE',  kind:'humanoid', c1:'#c03048', c2:'#3d0a14', c3:'#4d7dff', c4:'#d8e4ff',
+    head:'mask',   wep:'claw',   ranged:0, spd:1.45, hero:1, passPref:'blink' },
+  { id:'stardust',name:'STARDUST', kind:'humanoid', c1:'#d8b34a', c2:'#4a3a12', c3:'#ffe98a', c4:'#fffbe0',
+    head:'crown',  wep:'staff',  cape:1, ranged:1, spd:0.94, hero:1,
+    elem: { cols: ['#ffe98a', '#ffffff', '#c8b4ff'], n: 14 } },
+  { id:'blackterror', name:'BLACK TERROR', kind:'humanoid', c1:'#2a2a34', c2:'#0c0c12', c3:'#e8e8f0', c4:'#ffffff',
+    head:'skull',  wep:'fist',   cape:1, ranged:0, spd:0.95, bulk:1, hero:1 },
+
+  /* ── the raid bench: monsters that crawl out of the forest. Never drafted
+     into the normal rotation (off:1); they only appear as a raid, and the
+     heroes on screen drop what they are doing to put them down together. */
+  { id:'skeleton', name:'SKELETON', kind:'humanoid', c1:'#cfc8b8', c2:'#4a463c', c3:'#e8e2d0', c4:'#fffef4',
+    head:'skull',  wep:'sword',  ranged:0, spd:0.9, monster:1, off:1, hp: 3 },
+  { id:'kobold',  name:'KOBOLD',   kind:'humanoid', c1:'#a05430', c2:'#361a0c', c3:'#ff8a4d', c4:'#ffd8bd',
+    head:'horn',   wep:'dagger', ranged:0, spd:1.35, monster:1, off:1, hp: 2, grow: 0.8 },
+  { id:'bugbear', name:'BUGBEAR',  kind:'humanoid', c1:'#6e5638', c2:'#251c10', c3:'#c8a05e', c4:'#f0dfc0',
+    head:'hood',   wep:'hammer', ranged:0, spd:0.7, monster:1, off:1, hp: 5, heavy:1, bulk:1, grow: 1.15 },
+  { id:'ghoul',   name:'GHOUL',    kind:'humanoid', c1:'#5e7a4a', c2:'#1e2a16', c3:'#a8d86e', c4:'#e8ffc9',
+    head:'mask',   wep:'claw',   ranged:0, spd:1.15, monster:1, off:1, hp: 3 },
+  { id:'ogre',    name:'OGRE',     kind:'humanoid', c1:'#7a6248', c2:'#2a2014', c3:'#d8b078', c4:'#ffe9c9',
+    head:'horn',   wep:'fist',   ranged:0, spd:0.6, monster:1, off:1, hp: 6, heavy:1, bulk:1, grow: 1.22 }
 ];
 
 /* --------------------------------------------------------- pose engine -- */
@@ -801,7 +843,7 @@ function glowBlob(color) {
 
 var LEVEL_XP = [0, 1, 2, 4, 7, 10, 14];       // wins needed for levels 0..6
 var MAX_LEVEL = 6;
-var XP_STORE = 'bluerydge.arena.xp';
+var XP_STORE = 'arena.wallpaper.xp';
 
 function levelFor(xp) {
   var l = 0;
@@ -884,7 +926,7 @@ function saveXP() {
 /* Award a win. Returns the new level if the fighter went up, else 0. */
 function awardXP(actor, n) {
   var spec = actor.s;
-  if (!cfg.levels) return 0;
+  if (!cfg.levels || spec.monster) return 0;
   spec.xp = (spec.xp || 0) + (n || 1);
   var was = spec.lvl || 0, now = levelFor(spec.xp);
   if (now === was) { saveXP(); return 0; }
@@ -1010,11 +1052,14 @@ function bakeAll(K, onDone) {
 /* --------------------------------------------------------------- view --- */
 
 var sceneEl = document.getElementById('scene'),
+    skyEl   = document.getElementById('sky'),
+    beamEl  = document.getElementById('beam'),
     fxEl    = document.getElementById('fx'),
     marksEl = document.getElementById('marks'),
     gradeEl = document.getElementById('grade'),
     bootEl  = document.getElementById('boot');
-var sg = ctx2d(sceneEl, false), fg = ctx2d(fxEl, true);
+var sg = ctx2d(sceneEl, false), fg = ctx2d(fxEl, true), bg = ctx2d(beamEl, true),
+    sy = ctx2d(skyEl, true);
 
 var V = {};   // live view metrics
 
@@ -1026,13 +1071,25 @@ function measure() {
   var S = cfg.scale;
   var groundY = Math.max(40, H - cfg.taskbar);
   var stripTop = Math.max(0, Math.round(groundY - (FEET * S + 52)));
-  /* Fix the mark's position from the unadjusted strip first. Deriving it from
-     the adjusted value would be circular: lowering the strip for the portal
-     would move the mark, which would move the strip again. */
-  var markY = Math.round(cfg.logoy > 0 ? H * cfg.logoy
-                                       : Math.min(stripTop * 0.62, H * 0.42));
-  /* The animated layer has to reach the mark, or there is nothing to fall from. */
-  if (cfg.portal && cfg.logo) stripTop = Math.max(0, Math.min(stripTop, markY - 60));
+
+  /* The portal is the sun by day and the moon by night, and it keeps real
+     hours: rising on the left, peaking at midday or midnight, setting right. */
+  var VW0 = solo ? W * cfg.screens : W;
+  var hf = cfg.hour >= 0 ? cfg.hour : 13;
+  if (cfg.hour < 0 && cfg.ambient) {
+    var dn = new Date(); hf = dn.getHours() + dn.getMinutes() / 60;
+  }
+  var isDay = hf >= 6 && hf < 18;
+  var arc = isDay ? (hf - 6) / 12 : ((hf >= 18 ? hf - 18 : hf + 6) / 12);
+  var sunR = Math.max(30, Math.min(150, H * 0.058));
+  var sun = {
+    day: isDay, p: arc, r: sunR, hour: hf,
+    x: VW0 * (0.14 + 0.72 * arc),
+    y: Math.round(H * (0.34 - 0.16 * Math.sin(Math.PI * arc)))
+  };
+  /* The fall happens on a separate, narrow, full-height canvas that only
+     exists while someone is actually falling — so the per-frame clear stays
+     a bottom strip, not the whole screen. */
 
   V = {
     W: W, H: H, dpr: dpr, S: S,
@@ -1040,7 +1097,7 @@ function measure() {
     VW: solo ? W * cfg.screens : W,                // virtual span width
     OFF: solo ? cfg.panel * W : 0,                 // virtual x of this window's left edge
     panelW: panelW, panels: cfg.screens,
-    groundY: groundY, stripTop: stripTop, stripH: H - stripTop, markY: markY,
+    groundY: groundY, stripTop: stripTop, stripH: H - stripTop, sun: sun,
     cellW: ART_W * S, cellH: ART_H * S,
     dprInt: Math.max(1, Math.min(3, Math.round(dpr)))
   };
@@ -1050,7 +1107,18 @@ function measure() {
   fxEl.width = Math.round(W * dpr); fxEl.height = Math.round(V.stripH * dpr);
   fxEl.style.width = W + 'px'; fxEl.style.height = V.stripH + 'px';
   fxEl.style.top = V.stripTop + 'px';
-  sg = ctx2d(sceneEl, false); fg = ctx2d(fxEl, true);
+
+  var bw = Math.max(320, Math.round(sun.r * 7));
+  V.beamW = bw;
+  V.beamL = Math.round(sun.x - V.OFF - bw / 2);
+  beamEl.width = Math.round(bw * dpr); beamEl.height = Math.round(groundY * dpr);
+  beamEl.style.width = bw + 'px'; beamEl.style.height = groundY + 'px';
+  beamEl.style.left = V.beamL + 'px'; beamEl.style.top = '0px';
+
+  skyEl.width = Math.round(W * dpr); skyEl.height = Math.round(groundY * dpr);
+  skyEl.style.width = W + 'px'; skyEl.style.height = groundY + 'px';
+  sg = ctx2d(sceneEl, false); fg = ctx2d(fxEl, true); bg = ctx2d(beamEl, true);
+  sy = ctx2d(skyEl, true);
 }
 
 /* deterministic PRNG so the skyline is stable across repaints */
@@ -1059,397 +1127,577 @@ function seeded(seed) {
   return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
 }
 
-function dotPattern(g, spacing, radius, color, offx, offy) {
-  var t = mkCanvas(spacing, spacing), tg = ctx2d(t);
-  tg.fillStyle = color;
-  tg.beginPath(); tg.arc(spacing / 2, spacing / 2, radius, 0, 7); tg.fill();
-  var p = g.createPattern(t, 'repeat');
-  g.save(); g.translate(offx, offy); g.fillStyle = p;
-  g.fillRect(-offx, -offy, V.W + spacing, V.H + spacing); g.restore();
+/* --------------------------------------------------------------- scene --
+   A painted valley that runs continuously across the whole span, changing
+   biome from left to right: deep rainforest, then a waterfall gorge at the
+   centre, then terraced fields and a stilt village. Everything is seeded,
+   drawn in virtual coordinates minus V.OFF (so per-monitor instances line
+   up across the bezel), and repainted only on resize or the ten-minute
+   ambient tick — never per frame.                                          */
+
+function nightAmt(h) {
+  if (h >= 8 && h < 16.5) return 0;
+  if (h >= 16.5 && h < 19.5) return (h - 16.5) / 3;
+  if (h >= 19.5 || h < 5) return 1;
+  return 1 - (h - 5) / 3;                      // 5..8 dawn
+}
+function duskAmt(h) {                          // warm cast at both twilights
+  var d1 = Math.max(0, 1 - Math.abs(h - 6.6) / 1.6);
+  var d2 = Math.max(0, 1 - Math.abs(h - 17.6) / 1.6);
+  return Math.max(d1, d2);
 }
 
-function hexPath(g, cx, cy, r) {
-  g.beginPath();
-  for (var i = 0; i < 6; i++) {
-    var a = Math.PI / 3 * i - Math.PI / 2, x = cx + r * Math.cos(a), y = cy + r * 1.09 * Math.sin(a);
-    if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
-  }
-  g.closePath();
-}
+function wseed(n) { return seeded((cfg.seed * 977 + n) >>> 0); }
 
-/* The scene keeps office hours: deepest at night, a violet cast at dawn and
-   dusk, a lift of blue through the day. Subtle on purpose — it is still the
-   brand navy — and repainted every ten minutes, not per frame. */
-var SKY_KEYS = [   // hour, four sky stops, bloom rgb, bloom strength
-  [3,  ['#01030a', '#020912', '#03101f', '#010409'], [4, 80, 200], 0.13],
-  [6,  ['#050411', '#0a0920', '#191033', '#030310'], [110, 70, 210], 0.17],
-  [12, ['#02060f', '#04101f', '#072138', '#020a14'], [10, 125, 230], 0.22],
-  [18, ['#030510', '#080b22', '#131038', '#03040f'], [90, 60, 200], 0.19],
-  [23, ['#01030a', '#020914', '#03101f', '#010409'], [4, 80, 200], 0.13]
-];
-
-function skyNow() {
-  if (!cfg.ambient) return SKY_KEYS[2];
-  var d = new Date(), h = d.getHours() + d.getMinutes() / 60;
-  var a = SKY_KEYS[0], b = SKY_KEYS[SKY_KEYS.length - 1];
-  for (var i = 0; i < SKY_KEYS.length - 1; i++) {
-    if (h >= SKY_KEYS[i][0] && h < SKY_KEYS[i + 1][0]) { a = SKY_KEYS[i]; b = SKY_KEYS[i + 1]; break; }
-  }
-  var t = a === b ? 0 : Math.max(0, Math.min(1, (h - a[0]) / (b[0] - a[0])));
-  if (h < SKY_KEYS[0][0]) { a = SKY_KEYS[SKY_KEYS.length - 1]; b = SKY_KEYS[0]; t = (h + 24 - a[0]) / (b[0] + 24 - a[0]); }
-  var stops = [];
-  for (var q = 0; q < 4; q++) stops.push(mix(a[1][q], b[1][q], t));
-  var br = [], j;
-  for (j = 0; j < 3; j++) br.push(Math.round(a[2][j] * (1 - t) + b[2][j] * t));
-  return [0, stops, br, a[3] * (1 - t) + b[3] * t];
+/* The valley's layout is itself rolled from the seed: where the gorge sits,
+   which side the rainforest holds, how dense the village is. Same seed,
+   same valley — a different machine gets a different one. */
+var LAYOUT = null;
+function layout() {
+  if (LAYOUT && LAYOUT.seed === cfg.seed) return LAYOUT;
+  var r = wseed(1);
+  LAYOUT = {
+    seed: cfg.seed,
+    gorgeU: 0.40 + r() * 0.20,          // the falls wander around mid-span
+    mirror: r() < 0.5,                  // half of all valleys run village→forest
+    huts: 6 + (r() * 6) | 0,
+    giants: 4 + (r() * 4) | 0
+  };
+  return LAYOUT;
 }
+function bu(u) { return layout().mirror ? 1 - u : u; }   // biome-space u
+
+/* biome weights along the span, u = x / VW (already biome-space) */
+function wForest(u)  { var g = layout().gorgeU; return Math.max(0, Math.min(1, (g + 0.05 - bu(u)) / 0.18 + 0.4)); }
+function wVillage(u) { var g = layout().gorgeU; return Math.max(0, Math.min(1, (bu(u) - g - 0.06) / 0.16)); }
 
 function paintScene() {
-  var W = V.W, H = V.H, G = V.groundY, U = V.U;
+  var W = V.W, H = V.H, G = V.groundY, U = V.U, OFF = V.OFF, VW = V.VW;
+  var h = V.sun.hour, nite = nightAmt(h), dusk = duskAmt(h);
   sg.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
   sg.clearRect(0, 0, W, H);
 
-  var tone = skyNow();
-  var sky = sg.createLinearGradient(0, 0, 0, H);
-  sky.addColorStop(0, tone[1][0]);
-  sky.addColorStop(0.42, tone[1][1]);
-  sky.addColorStop(0.80, tone[1][2]);
-  sky.addColorStop(1, tone[1][3]);
-  sg.fillStyle = sky; sg.fillRect(0, 0, W, H);
+  /* sky */
+  var top = mix(mix('#4e9fd6', '#060d22', nite), '#7a4a6e', dusk * 0.45);
+  var mid = mix(mix('#9fd0e8', '#0d1e38', nite), '#e08a56', dusk * 0.55);
+  var hor = mix(mix('#d8ecda', '#14304a', nite), '#f2b070', dusk * 0.6);
+  var sky = sg.createLinearGradient(0, 0, 0, G);
+  sky.addColorStop(0, top); sky.addColorStop(0.62, mid); sky.addColorStop(1, hor);
+  sg.fillStyle = sky; sg.fillRect(0, 0, W, G);
 
-  /* One bloom per monitor, so each screen is composed around its own mark */
-  for (var p = 0; p < V.panels; p++) {
-    var cx = (p + 0.5) * V.panelW - V.OFF;
-    if (cx < -V.panelW || cx > W + V.panelW) continue;
-    var bl = sg.createRadialGradient(cx, H * 0.46, 0, cx, H * 0.46, V.panelW * 0.6);
-    var bc = tone[2].join(',');
-    bl.addColorStop(0, 'rgba(' + bc + ',' + tone[3].toFixed(3) + ')');
-    bl.addColorStop(0.45, 'rgba(' + bc + ',' + (tone[3] * 0.42).toFixed(3) + ')');
-    bl.addColorStop(1, 'rgba(0,0,0,0)');
-    sg.fillStyle = bl; sg.fillRect(cx - V.panelW * 0.7, 0, V.panelW * 1.4, H);
+  /* stars */
+  if (nite > 0.25) {
+    var rs = wseed(31);
+    sg.fillStyle = 'rgba(235,244,255,' + (0.75 * (nite - 0.25) / 0.75).toFixed(3) + ')';
+    for (var st = 0; st < 140; st++) {
+      var sxx = rs() * VW - OFF, syy = rs() * G * 0.65, rr2 = rs();
+      if (sxx < -4 || sxx > W + 4) continue;
+      sg.fillRect(sxx, syy, rr2 > 0.9 ? 2 : 1, rr2 > 0.9 ? 2 : 1);
+    }
   }
 
-  hexLattice(G, U);
-  halftoneField(G, U);
-
-  /* fine circuit texture */
-  var d1 = Math.round(34 * U);
-  dotPattern(sg, d1, 0.9 * U, 'rgba(60,140,240,0.10)', -V.OFF % d1, 0);
-
-  nodeWeb(G, U);
-
-  /* The arena floor the fighters run on = the top edge of the taskbar */
-  var band = 30 * U;
-  var fl = sg.createLinearGradient(0, G - band, 0, G + 6);
-  fl.addColorStop(0, 'rgba(0,150,255,0)');
-  fl.addColorStop(0.7, 'rgba(0,170,255,0.12)');
-  fl.addColorStop(1, 'rgba(120,230,255,0.34)');
-  sg.fillStyle = fl; sg.fillRect(0, G - band, W, band + 6);
-
-  sg.fillStyle = 'rgba(0,7,16,0.9)'; sg.fillRect(0, G + 2, W, H - G);
-  sg.fillStyle = 'rgba(170,240,255,0.95)'; sg.fillRect(0, G, W, Math.max(2, Math.round(2 * U)));
-  sg.fillStyle = 'rgba(0,200,255,0.28)'; sg.fillRect(0, G + 2 * U, W, Math.max(1, Math.round(U)));
-
-  sg.fillStyle = 'rgba(90,200,255,0.14)';
-  var tick = Math.round(64 * U);
-  for (var x = -(V.OFF % tick); x < W; x += tick) {
-    sg.fillRect(x, G + 5 * U, 24 * U, Math.max(1, U | 0));
+  /* light around the portal-sun */
+  var sunSX = V.sun.x - OFF;
+  if (sunSX > -W && sunSX < W * 2) {
+    var warm = V.sun.day ? '255,214,140' : '190,210,255';
+    var glowA = V.sun.day ? 0.5 : 0.34;
+    var gl = sg.createRadialGradient(sunSX, V.sun.y, 0, sunSX, V.sun.y, H * 0.55);
+    gl.addColorStop(0, 'rgba(' + warm + ',' + glowA + ')');
+    gl.addColorStop(0.4, 'rgba(' + warm + ',' + (glowA * 0.3).toFixed(3) + ')');
+    gl.addColorStop(1, 'rgba(' + warm + ',0)');
+    sg.fillStyle = gl;
+    sg.fillRect(sunSX - H * 0.6, V.sun.y - H * 0.6, H * 1.2, H * 1.2);
   }
 
-  /* a seam pip at every monitor boundary */
-  for (var s2 = 1; s2 < V.panels; s2++) {
-    var sx = s2 * V.panelW - V.OFF;
-    if (sx < -4 || sx > W + 4) continue;
-    var beam = 170 * U;
-    var sm = sg.createLinearGradient(0, G - beam, 0, G);
-    sm.addColorStop(0, 'rgba(0,190,255,0)'); sm.addColorStop(1, 'rgba(0,190,255,0.20)');
-    sg.fillStyle = sm; sg.fillRect(sx - 1, G - beam, Math.max(2, U | 0), beam);
+  /* clouds */
+  var rc = wseed(47);
+  for (var cl = 0; cl < 9; cl++) {
+    var cx2 = rc() * VW - OFF, cy2 = G * (0.1 + rc() * 0.3);
+    var cw2 = (120 + rc() * 260) * U, chh = cw2 * (0.16 + rc() * 0.08);
+    if (cx2 < -cw2 || cx2 > W + cw2) continue;
+    sg.fillStyle = rgba(mix('#ffffff', '#26364f', nite), 0.10 + rc() * 0.08);
+    sg.beginPath(); sg.ellipse(cx2, cy2, cw2, chh, 0, 0, 7); sg.fill();
+    sg.beginPath(); sg.ellipse(cx2 - cw2 * 0.4, cy2 + chh * 0.4, cw2 * 0.55, chh * 0.7, 0, 0, 7); sg.fill();
   }
-}
 
-/* Loose honeycomb of hex outlines — the placemat's signature motif. */
-function hexLattice(G, U) {
-  var R = 92 * U, dx = R * 1.5, dy = R * Math.sqrt(3);
-  var r = seeded(4711);
-  var x0 = -((V.OFF % dx) + dx), cols = Math.ceil((V.W + dx * 2) / dx);
-  sg.lineWidth = Math.max(1, U * 0.9);
-  for (var c = 0; c <= cols; c++) {
-    for (var row = -1; row * dy < V.H + dy; row++) {
-      var hx = x0 + c * dx;
-      var hy = row * dy + (c % 2 ? dy / 2 : 0);
-      var n = r();
-      if (n < 0.55) continue;                       // a lattice, not a grid
-      var fade = Math.max(0, 1 - Math.max(0, hy - G + 120 * U) / (200 * U));
-      var a = (0.07 + n * 0.13) * fade;
-      if (a < 0.012) continue;
-      sg.strokeStyle = 'rgba(58,150,255,' + a.toFixed(3) + ')';
-      hexPath(sg, hx, hy, R * 0.94);
+  ridge(23, G - 300 * U, 90 * U,
+        mix(mix('#7fae9c', '#132b3d', nite), '#c98a6a', dusk * 0.3),
+        mix(mix('#5d9483', '#0e2233', nite), '#a86e52', dusk * 0.3));
+  ridge(59, G - 210 * U, 70 * U,
+        mix(mix('#4f8a66', '#0c1e2c', nite), '#8a6248', dusk * 0.25),
+        mix(mix('#39704e', '#091723', nite), '#6e4c38', dusk * 0.25));
+
+  forest(G, U, nite);
+  waterfallGorge(G, U, nite);
+  village(G, U, nite);
+
+  /* ground band: forest floor on the left drying to a village path right */
+  var gnd = sg.createLinearGradient(0 - OFF, 0, VW - OFF, 0);
+  gnd.addColorStop(0, mix('#2c4a2e', '#0a1410', nite));
+  gnd.addColorStop(0.5, mix('#33503a', '#0c1713', nite));
+  gnd.addColorStop(1, mix('#5c4a33', '#171410', nite));
+  sg.fillStyle = gnd; sg.fillRect(0, G, W, H - G);
+  var gl2 = sg.createLinearGradient(0, G - 16 * U, 0, G);
+  gl2.addColorStop(0, 'rgba(0,0,0,0)');
+  gl2.addColorStop(1, rgba(mix('#e8f2c8', '#28425c', nite), 0.28));
+  sg.fillStyle = gl2; sg.fillRect(0, G - 16 * U, W, 16 * U);
+  sg.fillStyle = rgba(mix('#f2f8dc', '#9fc4e8', nite), nite > 0.5 ? 0.22 : 0.4);
+  sg.fillRect(0, G, W, Math.max(1, Math.round(1.4 * U)));
+
+  /* grass tufts / village lanterns along the edge */
+  var rg = wseed(83);
+  for (var gt = 0; gt < VW / (26 * U); gt++) {
+    var gx2 = rg() * VW, u2 = gx2 / VW, gsx = gx2 - OFF;
+    if (gsx < -8 || gsx > W + 8) continue;
+    if (wVillage(u2) > 0.6 && rg() < 0.2) {
+      sg.fillStyle = rgba('#ffb45e', 0.35 + nite * 0.6);      // lantern
+      sg.fillRect(gsx, G - 7 * U, 2 * U, 2 * U);
+      sg.fillStyle = rgba('#5c4a33', 0.8);
+      sg.fillRect(gsx + 0.6 * U, G - 5 * U, 0.8 * U, 5 * U);
+    } else if (wForest(u2) > 0.3) {
+      sg.strokeStyle = rgba(mix('#4a7a44', '#12241c', nite), 0.7);
+      sg.lineWidth = Math.max(1, U * 0.8);
+      sg.beginPath();
+      sg.moveTo(gsx, G); sg.lineTo(gsx + (rg() - 0.5) * 5 * U, G - (3 + rg() * 5) * U);
       sg.stroke();
-      if (n > 0.92) {                               // occasional lit cell
-        sg.fillStyle = 'rgba(0,150,255,' + (0.05 * fade).toFixed(3) + ')';
-        hexPath(sg, hx, hy, R * 0.9); sg.fill();
-      }
+    }
+  }
+
+  /* fireflies deep in the forest at night */
+  if (nite > 0.5) {
+    var rf = wseed(101);
+    for (var ff = 0; ff < 40; ff++) {
+      var fx2 = rf() * VW, fu = fx2 / VW, fsx = fx2 - OFF;
+      if (wForest(fu) < 0.4 || fsx < 0 || fsx > W) continue;
+      sg.fillStyle = rgba('#d8ff8a', 0.25 + rf() * 0.45);
+      sg.fillRect(fsx, G - (20 + rf() * 130) * U, 2, 2);
+    }
+  }
+
+  /* valley mist */
+  var mist = sg.createLinearGradient(0, G - 90 * U, 0, G);
+  mist.addColorStop(0, 'rgba(210,230,235,0)');
+  mist.addColorStop(1, rgba(mix('#dcecec', '#1c3346', nite), 0.16));
+  sg.fillStyle = mist; sg.fillRect(0, G - 90 * U, W, 90 * U);
+
+  /* god rays fanning down from the portal-sun by day */
+  var sunSX2 = V.sun.x - OFF;
+  if (nite < 0.6 && sunSX2 > -W * 0.5 && sunSX2 < W * 1.5) {
+    sg.save();
+    sg.globalCompositeOperation = 'lighter';
+    var rayA = (0.06 - nite * 0.08);
+    for (var ry = 0; ry < 5; ry++) {
+      var ang = -0.5 + ry * 0.25 + (cfg.seed % 7) * 0.03;
+      var rw = (30 + ry * 14) * U;
+      var ray = sg.createLinearGradient(sunSX2, V.sun.y, sunSX2 + Math.sin(ang) * H, G);
+      ray.addColorStop(0, 'rgba(255,236,180,' + Math.max(0, rayA).toFixed(3) + ')');
+      ray.addColorStop(1, 'rgba(255,236,180,0)');
+      sg.fillStyle = ray;
+      sg.beginPath();
+      sg.moveTo(sunSX2, V.sun.y);
+      sg.lineTo(sunSX2 + Math.sin(ang) * H - rw, G);
+      sg.lineTo(sunSX2 + Math.sin(ang) * H + rw, G);
+      sg.closePath(); sg.fill();
+    }
+    sg.restore();
+  }
+
+  bloomPass(nite);
+}
+
+/* A cheap true bloom: the finished scene, downsampled and blurred, added
+   back over itself. Runs at paint time only, so it costs one frame per
+   repaint, not per frame. */
+function bloomPass(nite) {
+  if (!CAN_FILTER) return;
+  try {
+    var bw = Math.max(64, V.W >> 2), bh = Math.max(36, V.H >> 2);
+    var off = mkCanvas(bw, bh), og = ctx2d(off);
+    og.filter = 'blur(' + Math.max(3, 5 * V.U).toFixed(1) + 'px) saturate(1.25)';
+    og.drawImage(sceneEl, 0, 0, bw, bh);
+    sg.save();
+    sg.globalCompositeOperation = 'lighter';
+    sg.globalAlpha = 0.10 + nite * 0.10;
+    sg.drawImage(off, 0, 0, V.W, V.H);
+    sg.restore();
+  } catch (e) { /* a scene without bloom is still a scene */ }
+}
+
+/* rolling ridge line filled to the ground, drawn with a horizontal gradient
+   so the biome hue drifts smoothly left to right */
+function ridge(seed, baseY, amp, colL, colR) {
+  var r = wseed(seed), W = V.W, OFF = V.OFF;
+  var p1 = r() * 7, p2 = r() * 7, f1 = 0.0022 + r() * 0.001, f2 = 0.005 + r() * 0.002;
+  var grad = sg.createLinearGradient(-OFF, 0, V.VW - OFF, 0);
+  grad.addColorStop(0, colL); grad.addColorStop(1, colR);
+  sg.fillStyle = grad;
+  sg.beginPath();
+  sg.moveTo(-4, V.groundY);
+  for (var x = -4; x <= W + 4; x += 6) {
+    var vx = x + OFF;
+    sg.lineTo(x, baseY + Math.sin(vx * f1 + p1) * amp + Math.sin(vx * f2 + p2) * amp * 0.35);
+  }
+  sg.lineTo(W + 4, V.groundY);
+  sg.closePath(); sg.fill();
+}
+
+/* layered rainforest canopy with a few emergent crowns */
+function forest(G, U, nite) {
+  var layers = [
+    [131, 150, 46, mix('#2e6b46', '#0a1f24', nite)],
+    [173, 96, 38, mix('#3d8a52', '#0d2a2c', nite)],
+    [211, 52, 30, mix('#54a862', '#123a34', nite)]
+  ];
+  for (var L = 0; L < layers.length; L++) {
+    var r = wseed(layers[L][0]), baseY = G - layers[L][1] * U, blob = layers[L][2] * U;
+    sg.fillStyle = layers[L][3];
+    sg.beginPath();
+    sg.moveTo(-6, G + 4);
+    for (var x = -6; x <= V.W + 6; x += blob * 0.6) {
+      var u = (x + V.OFF) / V.VW, w = wForest(u);
+      if (w < 0.03) { sg.lineTo(x, G + 4); continue; }
+      var y = baseY + (r() - 0.5) * 26 * U + (1 - w) * (G - baseY) * 0.9;
+      sg.arc(x, y, blob * (0.7 + r() * 0.5) * (0.35 + w * 0.65), Math.PI, 0);
+    }
+    sg.lineTo(V.W + 6, G + 4);
+    sg.closePath(); sg.fill();
+  }
+  /* emergent giants: broad crowns clear of the canopy, buttressed trunks */
+  var re = wseed(251);
+  for (var t = 0; t < layout().giants; t++) {
+    var vx = re() * V.VW, u2 = vx / V.VW, x2 = vx - V.OFF;
+    var gu2 = layout().mirror ? 1 - layout().gorgeU : layout().gorgeU;
+    if (wForest(u2) < 0.55 || Math.abs(u2 - gu2) < 0.09 || x2 < -120 || x2 > V.W + 120) continue;
+    var th = (165 + re() * 45) * U, tw = (9 + re() * 4) * U;
+    var lean = (re() - 0.5) * 14 * U;
+    var trunk = mix('#4a3826', '#0e0b08', nite);
+    var crown = mix('#57a865', '#123a30', nite);
+    var crownL = mix('#79c47e', '#1a4a3a', nite);
+    sg.strokeStyle = trunk; sg.lineCap = 'round';
+    sg.lineWidth = tw;
+    sg.beginPath(); sg.moveTo(x2, G + 2); sg.quadraticCurveTo(x2 + lean * 0.4, G - th * 0.55, x2 + lean, G - th); sg.stroke();
+    sg.lineWidth = tw * 0.5;                            // two main boughs
+    sg.beginPath(); sg.moveTo(x2 + lean * 0.7, G - th * 0.8);
+    sg.lineTo(x2 + lean - 26 * U, G - th - 10 * U); sg.stroke();
+    sg.beginPath(); sg.moveTo(x2 + lean * 0.7, G - th * 0.8);
+    sg.lineTo(x2 + lean + 24 * U, G - th - 6 * U); sg.stroke();
+    var cxT = x2 + lean, cyT = G - th - 8 * U;
+    var puffs = [[-52, 8, 44], [50, 4, 40], [0, -22, 56], [-22, -8, 40], [26, -14, 38]];
+    for (var b = 0; b < puffs.length; b++) {
+      sg.fillStyle = b === 2 ? crownL : crown;
+      sg.beginPath();
+      sg.ellipse(cxT + puffs[b][0] * U, cyT + puffs[b][1] * U,
+                 puffs[b][2] * U * (0.85 + re() * 0.3), puffs[b][2] * 0.55 * U, 0, 0, 7);
+      sg.fill();
     }
   }
 }
 
-/* Halftone gradients: dot grids whose radius falls off from a focus. */
-function halftoneField(G, U) {
-  var r = seeded(90210);
-  var spacing = 11 * U;
-  /* biased to the panel edges, the way the placemat frames its artwork —
-     the middle of each screen stays clear for desktop icons */
-  var spots = [];
-  for (var p = 0; p < V.panels; p++) {
-    var base = (p + 0.5) * V.panelW - V.OFF;
-    spots.push([base - V.panelW * 0.50, V.H * 0.30, V.panelW * 0.20]);
-    spots.push([base + V.panelW * 0.50, V.H * 0.62, V.panelW * 0.20]);
-    spots.push([base - V.panelW * 0.30, V.H * 0.88, V.panelW * 0.15]);
-    spots.push([base + V.panelW * 0.32, V.H * 0.10, V.panelW * 0.15]);
-  }
-  sg.fillStyle = 'rgba(70,165,255,0.20)';
-  for (var i = 0; i < spots.length; i++) {
-    var cx = spots[i][0], cy = spots[i][1], rad = spots[i][2];
-    if (cx < -rad || cx > V.W + rad) continue;
-    for (var y = cy - rad; y <= cy + rad; y += spacing * 0.87) {
-      var stagger = ((((y - cy) / (spacing * 0.87)) | 0) % 2) * spacing * 0.5;
-      for (var x = cx - rad + stagger; x <= cx + rad; x += spacing) {
-        var ddx = (x - cx) / rad, ddy = (y - cy) / rad;
-        var d = Math.sqrt(ddx * ddx + ddy * ddy);
-        if (d > 1) continue;
-        var rr = (1 - d) * (1 - d) * spacing * 0.32;
-        if (rr < 0.28) continue;
-        if (y > G - 8 * U) continue;                // keep the floor clean
-        sg.beginPath(); sg.arc(x, y, rr, 0, 7); sg.fill();
-      }
+/* the centrepiece: a gorge with falls at mid-span */
+function waterfallGorge(G, U, nite) {
+  var gu = layout().mirror ? 1 - layout().gorgeU : layout().gorgeU;
+  var cx = V.VW * gu - V.OFF, W2 = 240 * U;
+  if (cx < -W2 * 2 || cx > V.W + W2 * 2) return;
+  var topY = G - 195 * U;
+  var rock = mix('#5a5348', '#141410', nite), rockL = mix('#726a58', '#1c1b16', nite);
+  var water = mix('#bfe8f0', '#3d6e8a', nite * 0.8), foam = mix('#ffffff', '#7aa8c8', nite * 0.7);
+
+  /* the shadowed back wall of the gorge, falls pouring out of it */
+  var gapW = 78 * U;
+  var back = sg.createLinearGradient(0, topY, 0, G);
+  back.addColorStop(0, mix('#2c2822', '#070706', nite));
+  back.addColorStop(1, mix('#1c1a16', '#040404', nite));
+  sg.fillStyle = back;
+  sg.fillRect(cx - gapW / 2 - 8 * U, topY - 4 * U, gapW + 16 * U, G - topY + 4 * U);
+
+  /* cliff shoulders, stepped */
+  var r = wseed(307);
+  [-1, 1].forEach(function (dir) {
+    var grd = sg.createLinearGradient(cx + dir * gapW / 2, 0, cx + dir * (gapW / 2 + 170 * U), 0);
+    grd.addColorStop(0, rock); grd.addColorStop(1, rockL);
+    sg.fillStyle = grd;
+    sg.beginPath();
+    var px = cx + dir * gapW / 2;
+    sg.moveTo(px, topY - 2 * U);
+    for (var y = topY; y < G; y += 30 * U) {
+      px += dir * (10 + r() * 20) * U;
+      sg.lineTo(px, y + 14 * U);
+      sg.lineTo(px + dir * 6 * U, y + 30 * U);
     }
-    void r;
+    sg.lineTo(cx + dir * (gapW / 2 + 200 * U), G + 4);
+    sg.lineTo(cx + dir * gapW / 2, G + 4);
+    sg.closePath(); sg.fill();
+    sg.strokeStyle = rgba(mix('#8a8070', '#242018', nite), 0.5);   // strata
+    sg.lineWidth = Math.max(1, U);
+    for (var sy = topY + 26 * U; sy < G - 20 * U; sy += 34 * U) {
+      sg.beginPath();
+      sg.moveTo(cx + dir * (gapW / 2 + 8 * U), sy);
+      sg.lineTo(cx + dir * (gapW / 2 + (60 + r() * 90) * U), sy + (r() - 0.5) * 10 * U);
+      sg.stroke();
+    }
+  });
+  /* lip the water pours over */
+  sg.fillStyle = rockL;
+  sg.fillRect(cx - gapW / 2 - 10 * U, topY - 9 * U, gapW + 20 * U, 9 * U);
+  sg.fillStyle = rgba(foam, 0.85);
+  sg.fillRect(cx - gapW / 2, topY - 4 * U, gapW, 4 * U);
+
+  /* three streams: a broad main fall and two side threads */
+  [[0, 34], [-26, 12], [24, 9]].forEach(function (f) {
+    var fx = cx + f[0] * U, fw = f[1] * U;
+    var fall = sg.createLinearGradient(0, topY, 0, G);
+    fall.addColorStop(0, rgba(foam, 0.95));
+    fall.addColorStop(0.25, rgba(water, 0.85));
+    fall.addColorStop(0.8, rgba(water, 0.7));
+    fall.addColorStop(1, rgba(foam, 0.95));
+    sg.fillStyle = fall;
+    sg.fillRect(fx - fw / 2, topY - 2 * U, fw, G - topY + 2 * U);
+    var rf = wseed(401 + f[0]);
+    sg.fillStyle = rgba('#ffffff', nite > 0.5 ? 0.35 : 0.55);
+    for (var st = 0; st < 8; st++) {
+      sg.fillRect(fx - fw / 2 + rf() * fw, topY + rf() * (G - topY),
+                  Math.max(1, U * 1.2), (8 + rf() * 16) * U);
+    }
+  });
+
+  /* boulders, plunge pool, spray */
+  sg.fillStyle = rock;
+  sg.beginPath(); sg.ellipse(cx - 44 * U, G - 4 * U, 16 * U, 8 * U, 0, 0, 7); sg.fill();
+  sg.beginPath(); sg.ellipse(cx + 40 * U, G - 3 * U, 12 * U, 6 * U, 0, 0, 7); sg.fill();
+  sg.fillStyle = rgba(water, 0.8);
+  sg.beginPath(); sg.ellipse(cx, G - U, 92 * U, 10 * U, 0, 0, 7); sg.fill();
+  sg.fillStyle = rgba(foam, 0.55);
+  sg.beginPath(); sg.ellipse(cx - 6 * U, G - 3 * U, 46 * U, 5 * U, 0, 0, 7); sg.fill();
+  sg.beginPath(); sg.ellipse(cx + 30 * U, G - 2 * U, 20 * U, 3.5 * U, 0, 0, 7); sg.fill();
+  for (var m = 0; m < 5; m++) {
+    sg.fillStyle = rgba('#eef6f6', 0.12 - m * 0.018);
+    sg.beginPath();
+    sg.ellipse(cx + (m - 2) * 26 * U, G - (14 + m * 15) * U, (40 + m * 18) * U, (11 + m * 5) * U, 0, 0, 7);
+    sg.fill();
   }
 }
 
-/* Scattered nodes with short connectors, as on the placemat. */
-function nodeWeb(G, U) {
-  var r = seeded(1337), pts = [];
-  var n = Math.round(V.W / (170 / U));
-  for (var i = 0; i < n; i++) {
-    pts.push([r() * (V.W + 200) - 100, r() * (G - 60 * U)]);
+/* stilt huts and terraces on the right */
+function village(G, U, nite) {
+  var r = wseed(613);
+  /* terraced hillside behind the huts */
+  for (var tr = 0; tr < 5; tr++) {
+    var ty = G - (46 + tr * 26) * U;
+    var band = mix(tr % 2 ? '#7da05a' : '#8fae62', tr % 2 ? '#15251c' : '#182a1e', nite);
+    var grad = sg.createLinearGradient(-V.OFF, 0, V.VW - V.OFF, 0);
+    if (layout().mirror) {
+      grad.addColorStop(0, rgba(band, 0.95));
+      grad.addColorStop(0.14, rgba(band, 0.85));
+      grad.addColorStop(0.32, rgba(band, 0));
+      grad.addColorStop(1, rgba(band, 0));
+    } else {
+      grad.addColorStop(0, rgba(band, 0));
+      grad.addColorStop(0.68, rgba(band, 0));
+      grad.addColorStop(0.86, rgba(band, 0.85));
+      grad.addColorStop(1, rgba(band, 0.95));
+    }
+    sg.fillStyle = grad;
+    sg.beginPath();
+    sg.moveTo(-4, ty + 20 * U);
+    for (var x = -4; x <= V.W + 4; x += 30) {
+      sg.lineTo(x, ty + Math.sin((x + V.OFF) * 0.004 + tr) * 8 * U);
+    }
+    sg.lineTo(V.W + 4, G + 4); sg.lineTo(-4, G + 4);
+    sg.closePath(); sg.fill();
   }
-  sg.lineWidth = Math.max(1, U * 0.8);
-  for (var a = 0; a < pts.length; a++) {
-    for (var b = a + 1; b < pts.length; b++) {
-      var ddx = pts[a][0] - pts[b][0], ddy = pts[a][1] - pts[b][1];
-      var d = Math.sqrt(ddx * ddx + ddy * ddy);
-      if (d > 190 * U) continue;
-      sg.strokeStyle = 'rgba(60,160,255,' + (0.10 * (1 - d / (190 * U))).toFixed(3) + ')';
-      sg.beginPath(); sg.moveTo(pts[a][0], pts[a][1]); sg.lineTo(pts[b][0], pts[b][1]); sg.stroke();
+  /* huts */
+  for (var hN = 0; hN < layout().huts; hN++) {
+    var vu = layout().mirror ? r() * 0.4 : 0.6 + r() * 0.38;
+    var vx = V.VW * vu, u2 = vx / V.VW, x2 = vx - V.OFF;
+    var wv = wVillage(u2);
+    if (wv < 0.35 || x2 < -80 || x2 > V.W + 80) continue;
+    var hw = (38 + r() * 22) * U, hh = hw * 0.62;
+    var back = r() < 0.4;
+    var lift = back ? (34 + r() * 40) * U : 0;         // some sit up the hill
+    var hy = G - lift;
+    var wall = mix(back ? '#6e5a40' : '#7d6748', '#191712', nite);
+    var roof = mix(back ? '#4a3a28' : '#57432c', '#100e0a', nite);
+    var sc = back ? 0.72 : 1;
+    hw *= sc; hh *= sc;
+    /* stilts */
+    sg.strokeStyle = roof; sg.lineWidth = Math.max(1.5, 2.4 * U * sc);
+    sg.beginPath();
+    sg.moveTo(x2 - hw * 0.32, hy); sg.lineTo(x2 - hw * 0.32, hy - hh * 0.5);
+    sg.moveTo(x2 + hw * 0.32, hy); sg.lineTo(x2 + hw * 0.32, hy - hh * 0.5);
+    sg.stroke();
+    /* body */
+    sg.fillStyle = wall;
+    sg.fillRect(x2 - hw / 2, hy - hh * 0.5 - hh * 0.66, hw, hh * 0.66);
+    /* door and window, warm at night */
+    sg.fillStyle = rgba('#ffc87a', 0.35 + nite * 0.62);
+    sg.fillRect(x2 - hw * 0.3, hy - hh * 0.5 - hh * 0.52, hw * 0.16, hh * 0.3);
+    sg.fillRect(x2 + hw * 0.1, hy - hh * 0.5 - hh * 0.56, hw * 0.2, hh * 0.34);
+    /* porch rail */
+    sg.strokeStyle = roof; sg.lineWidth = Math.max(1, 1.2 * U * sc);
+    sg.beginPath();
+    sg.moveTo(x2 - hw * 0.6, hy - hh * 0.5);
+    sg.lineTo(x2 + hw * 0.6, hy - hh * 0.5);
+    sg.stroke();
+    /* roof: deep thatch triangle with overhang */
+    sg.fillStyle = roof;
+    sg.beginPath();
+    sg.moveTo(x2 - hw * 0.72, hy - hh * 0.5 - hh * 0.6);
+    sg.lineTo(x2, hy - hh * 0.5 - hh * 1.35);
+    sg.lineTo(x2 + hw * 0.72, hy - hh * 0.5 - hh * 0.6);
+    sg.closePath(); sg.fill();
+  }
+}
+
+/* -------------------------------------------------------------- portal --
+   The portal is a slowly turning pentagonal ring rendered by three.js into
+   its own small transparent canvas, positioned where the sun or moon would
+   hang. Gold and blazing by day, silver and cool by night. If WebGL is not
+   available it falls back to a flat pentagon drawn on the same canvas.     */
+
+var portalDom = null, P3 = null, portal2d = null;
+
+function ensurePortal() {
+  if (!marksEl) return;
+  if (!cfg.portal) { if (portalDom) portalDom.style.display = 'none'; return; }
+  if (!portalDom) {
+    portalDom = document.createElement('div');
+    portalDom.id = 'portal';
+    portalDom.appendChild(document.createElement('canvas'));
+    marksEl.appendChild(portalDom);
+    initPortal3D(portalDom.firstChild);
+  }
+  portalDom.style.display = 'block';
+  var sz = Math.round(V.sun.r * 3.2);
+  portalDom.style.left = Math.round(V.sun.x - V.OFF - sz / 2) + 'px';
+  portalDom.style.top = Math.round(V.sun.y - sz / 2) + 'px';
+  portalDom.style.width = sz + 'px';
+  portalDom.style.height = sz + 'px';
+  if (P3 && P3.size !== sz) { P3.size = sz; P3.renderer.setSize(sz, sz, false); }
+  if (!P3 && portal2d) { portal2d.width = sz; portal2d.height = sz; }
+  portalTick(0, true);
+}
+
+function pentShape(r) {
+  var sh = new THREE.Shape();
+  for (var i = 0; i < 5; i++) {
+    var a = Math.PI / 2 + i * Math.PI * 2 / 5;
+    if (i) sh.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    else sh.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  sh.closePath();
+  return sh;
+}
+
+function initPortal3D(canvas) {
+  if (typeof THREE === 'undefined') { portal2d = canvas; return; }
+  try {
+    var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    var scene = new THREE.Scene();
+    var cam = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+    cam.position.z = 8.2;
+
+    var shape = pentShape(2.05);
+    shape.holes.push(pentShape(1.5));
+    var geo = new THREE.ExtrudeGeometry(shape, {
+      depth: 0.55, bevelEnabled: true, bevelSize: 0.1, bevelThickness: 0.13, bevelSegments: 2
+    });
+    geo.center();
+    var ringMat = new THREE.MeshStandardMaterial({
+      color: 0xffc457, emissive: 0xff9420, emissiveIntensity: 0.55,
+      metalness: 0.55, roughness: 0.35
+    });
+    var ring = new THREE.Mesh(geo, ringMat);
+
+    var discMat = new THREE.MeshBasicMaterial({ color: 0xfff2c9, transparent: true, opacity: 0.95 });
+    var disc = new THREE.Mesh(new THREE.ShapeGeometry(pentShape(1.52)), discMat);
+    disc.position.z = -0.1;
+
+    var grp = new THREE.Group();
+    grp.add(ring); grp.add(disc);
+    scene.add(grp);
+    scene.add(new THREE.AmbientLight(0x8899aa, 0.9));
+    var key = new THREE.PointLight(0xffffff, 1.3); key.position.set(4, 6, 8); scene.add(key);
+
+    P3 = { renderer: renderer, scene: scene, cam: cam, grp: grp,
+           ring: ringMat, disc: discMat, t: 0, flare: 0, frame: 0, size: 0 };
+  } catch (e) {
+    P3 = null; portal2d = canvas;
+    console.warn('[arena] WebGL unavailable, flat portal:', e.message);
+  }
+}
+
+function portalFlare() { if (P3) P3.flare = 1.2; }
+
+function portalTick(dt, force) {
+  if (!cfg.portal || !portalDom) return;
+  var day = V.sun.day;
+
+  if (!P3) {                                    // 2D fallback
+    if (!portal2d || (!force && (frameNo & 3))) return;
+    var g2 = portal2d.getContext('2d'), S2 = portal2d.width;
+    g2.clearRect(0, 0, S2, S2);
+    g2.save();
+    g2.translate(S2 / 2, S2 / 2);
+    g2.rotate(Math.sin(clock * 0.25) * 0.18);
+    var R2 = S2 * 0.31;
+    g2.strokeStyle = day ? '#ffb347' : '#aabde0';
+    g2.lineWidth = S2 * 0.07;
+    g2.lineJoin = 'round';
+    g2.fillStyle = day ? 'rgba(255,242,201,0.95)' : 'rgba(230,239,255,0.9)';
+    g2.beginPath();
+    for (var i = 0; i <= 5; i++) {
+      var a = -Math.PI / 2 + i * Math.PI * 2 / 5;
+      i ? g2.lineTo(Math.cos(a) * R2, Math.sin(a) * R2) : g2.moveTo(Math.cos(a) * R2, Math.sin(a) * R2);
+    }
+    g2.closePath(); g2.fill(); g2.stroke();
+    g2.restore();
+    return;
+  }
+
+  P3.t += dt;
+  if (P3.flare > 0) P3.flare -= dt;
+  /* On a machine without GPU acceleration each render costs real main-thread
+     time. Measure the first renders; if they are slow, drop to a lazy mode
+     that re-renders only twice a second — the spin is scenery, not gameplay. */
+  var lazy = P3.slow && P3.flare <= 0;
+  if (!force && (P3.frame++ & (lazy ? 63 : 1))) return;
+
+  var g = P3.grp;
+  g.rotation.z = Math.sin(P3.t * 0.25) * 0.18;
+  g.rotation.y = Math.sin(P3.t * 0.4) * 0.38;
+  g.rotation.x = 0.10 + Math.sin(P3.t * 0.17) * 0.08;
+
+  P3.ring.color.setHex(day ? 0xffb347 : 0x9fb4de);
+  P3.ring.emissive.setHex(day ? 0xff8a1e : 0x5f7fc0);
+  P3.ring.emissiveIntensity = (day ? 0.55 : 0.42) +
+    Math.max(0, P3.flare) * 1.3 + Math.sin(P3.t * 1.7) * 0.08;
+  P3.disc.color.setHex(day ? 0xfff2c9 : 0xe6efff);
+  P3.disc.opacity = day ? 0.96 : 0.88;
+  var t0 = performance.now();
+  P3.renderer.render(P3.scene, P3.cam);
+  var cost = performance.now() - t0;
+  P3.costs = P3.costs || [];
+  if (P3.costs.length < 20) {
+    P3.costs.push(cost);
+    if (P3.costs.length === 20) {
+      var avg = P3.costs.reduce(function (a, b) { return a + b; }) / 20;
+      if (avg > 5) { P3.slow = true; console.warn('[arena] slow WebGL (' + avg.toFixed(1) + 'ms), portal goes lazy'); }
     }
   }
-  for (var k = 0; k < pts.length; k++) {
-    sg.fillStyle = 'rgba(120,205,255,0.30)';
-    sg.beginPath(); sg.arc(pts[k][0], pts[k][1], 1.5 * U, 0, 7); sg.fill();
-  }
 }
 
-/* --------------------------------------------------------------- logo --- */
-
-/* If assets/placemat.(png|jpg|webp|svg) exists at build time it is inlined
-   here as a data URI and used verbatim, centred on each monitor, in place of
-   the drawn lockup. See tools/build.py. Empty otherwise. */
-var PLACEMAT_SRC = '__PLACEMAT_SRC__';
-
-/* Likewise assets/logo.(svg|png|webp|jpg): the exact lockup, used in place of
-   the drawn one. Prefer .svg — it stays sharp at every size. Takes precedence
-   over the drawn mark; a placemat, being the larger artwork, wins over both. */
-var LOGO_SRC = '__LOGO_SRC__';
-/* Rendered as DOM/SVG rather than into the canvas: it stays perfectly crisp
-   at any DPI and costs nothing per frame.                                   */
-
-function logoSVG(id, w) {
-  var h = Math.round(w * 48 / 44);
-  return '<svg class="hexwrap" width="' + w + '" height="' + h + '" viewBox="0 0 44 48" aria-hidden="true">' +
-    '<defs>' +
-      '<linearGradient id="ring' + id + '" x1="0.15" y1="0" x2="0.85" y2="1">' +
-        '<stop offset="0" stop-color="#ff5b74"/><stop offset="0.5" stop-color="#e11d40"/>' +
-        '<stop offset="1" stop-color="#a10f2b"/></linearGradient>' +
-      '<linearGradient id="core' + id + '" x1="0.1" y1="0" x2="0.9" y2="1">' +
-        '<stop offset="0" stop-color="#8df4ff"/><stop offset="1" stop-color="#159fd6"/></linearGradient>' +
-    '</defs>' +
-    /* crimson outer ring */
-    '<polygon points="22,1.8 40.4,12.5 40.4,33.9 22,44.6 3.6,33.9 3.6,12.5" fill="rgba(4,12,24,0.6)" ' +
-      'stroke="url(#ring' + id + ')" stroke-width="3" stroke-linejoin="round"/>' +
-    /* cyan inner ring */
-    '<polygon points="22,8.4 34.8,15.8 34.8,30.6 22,38 9.2,30.6 9.2,15.8" fill="none" ' +
-      'stroke="url(#core' + id + ')" stroke-width="2.1" stroke-linejoin="round"/>' +
-    /* the "rydge" — a white chevron rising inside the mark */
-    '<polyline points="14.2,28.2 22,18.2 29.8,28.2" fill="none" stroke="#ffffff" ' +
-      'stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/>' +
-    '<polyline points="18.1,29.2 22,24.2 25.9,29.2" fill="none" stroke="rgba(141,244,255,0.75)" ' +
-      'stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
-  '</svg>';
-}
-
-/* A reconstruction of the Bluerydge placemat from the brand's own parts.
-   The photography in the original cannot be recreated, so the right-hand
-   strips are rendered as branded panels with silhouettes. Drop the real file
-   in at assets/placemat.* and this is bypassed entirely. */
-function placematCard(id, cw) {
-  var arrow = '<svg viewBox="0 0 24 24" aria-hidden="true">' +
-    '<circle cx="12" cy="12" r="11" fill="#22d3ee"/>' +
-    '<path d="M10 7l5 5-5 5" fill="none" stroke="#062033" stroke-width="2.6" ' +
-      'stroke-linecap="round" stroke-linejoin="round"/></svg>';
-
-  var bullets = [
-    'Secure Mission Capability', 'Cyber &amp; Technology',
-    'AI &amp; Robotic Integration', 'Research &amp; Development'
-  ].map(function (t) { return '<span><i></i>' + t + '</span>'; }).join('');
-
-  /* stand-ins for the original's photography, in the brand's palette */
-  var strips =
-    '<figure><svg viewBox="0 0 40 120" preserveAspectRatio="xMidYMid slice">' +
-      '<defs><linearGradient id="s1' + id + '" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#0f2c4c"/><stop offset="1" stop-color="#061424"/></linearGradient></defs>' +
-      '<rect width="40" height="120" fill="url(#s1' + id + ')"/>' +
-      '<g fill="none" stroke="rgba(120,200,255,0.16)" stroke-width="0.7">' +
-      '<path d="M0 30h40M0 60h40M0 90h40"/></g></svg></figure>' +
-
-    '<figure><svg viewBox="0 0 60 120" preserveAspectRatio="xMidYMid slice">' +
-      '<defs><linearGradient id="s2' + id + '" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#f0b478"/><stop offset="0.45" stop-color="#8a6f6a"/>' +
-      '<stop offset="1" stop-color="#20222e"/></linearGradient></defs>' +
-      '<rect width="60" height="120" fill="url(#s2' + id + ')"/>' +
-      '<g fill="#181a22">' +                                    /* helicopter */
-      '<rect x="20" y="40" width="17" height="6" rx="3"/>' +
-      '<rect x="35" y="41" width="14" height="2"/>' +
-      '<rect x="46" y="37" width="2" height="7"/>' +
-      '<rect x="12" y="36" width="30" height="1.4"/>' +
-      '<rect x="26" y="37" width="2" height="3"/>' +
-      '<rect x="24" y="46" width="9" height="1.2"/></g>' +
-      '<rect y="104" width="60" height="16" fill="#14161e"/></svg></figure>' +
-
-    '<figure><svg viewBox="0 0 70 120" preserveAspectRatio="xMidYMid slice">' +
-      '<defs><linearGradient id="s3' + id + '" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#caa079"/><stop offset="0.55" stop-color="#7d5f45"/>' +
-      '<stop offset="1" stop-color="#2b2018"/></linearGradient></defs>' +
-      '<rect width="70" height="120" fill="url(#s3' + id + ')"/>' +
-      '<g fill="#241a13">' +                                    /* figure, walking */
-      '<circle cx="35" cy="52" r="5"/>' +
-      '<rect x="30" y="57" width="10" height="20" rx="3"/>' +
-      '<rect x="26" y="59" width="4" height="14" rx="2"/>' +
-      '<rect x="40" y="59" width="4" height="14" rx="2"/>' +
-      '<rect x="30" y="76" width="4" height="18"/>' +
-      '<rect x="36" y="76" width="4" height="18"/></g>' +
-      '<rect y="92" width="70" height="28" fill="#2a1f16"/></svg></figure>' +
-
-    '<figure><svg viewBox="0 0 64 120" preserveAspectRatio="xMidYMid slice">' +
-      '<defs><linearGradient id="s4' + id + '" x1="0" y1="0" x2="0" y2="1">' +
-      '<stop offset="0" stop-color="#0e5f78"/><stop offset="0.5" stop-color="#0a3d55"/>' +
-      '<stop offset="1" stop-color="#04202f"/></linearGradient></defs>' +
-      '<rect width="64" height="120" fill="url(#s4' + id + ')"/>' +
-      '<g fill="#08222f">' +                                    /* android */
-      '<rect x="26" y="34" width="12" height="14" rx="5"/>' +
-      '<rect x="24" y="50" width="16" height="26" rx="5"/>' +
-      '<rect x="18" y="52" width="5" height="22" rx="2.5"/>' +
-      '<rect x="41" y="52" width="5" height="22" rx="2.5"/>' +
-      '<rect x="26" y="77" width="5" height="26" rx="2"/>' +
-      '<rect x="33" y="77" width="5" height="26" rx="2"/></g>' +
-      '<rect x="29" y="38" width="6" height="2" fill="rgba(140,240,255,0.7)"/></svg></figure>';
-
-  return '<div class="card" style="width:' + Math.round(cw) + 'px;height:' +
-      Math.round(cw / 3.07) + 'px;font-size:' + (cw / 100).toFixed(3) + 'px">' +
-    '<div class="cLogo">' + logoSVG('c' + id, Math.round(cw * 0.052)) +
-      '<div class="cWord">BLUERYDGE</div></div>' +
-    '<div class="cCopy">' +
-      '<div class="cTag1">Protect the Mission,</div>' +
-      '<div class="cTag2">Secure Your Vision</div>' +
-      '<div class="cBul">' + bullets + '</div>' +
-      '<div class="cFoot"><span>' + arrow + 'www.bluerydge.com</span>' +
-        '<span>' + arrow + '1800 CYBERS</span></div>' +
-    '</div>' +
-    '<div class="cStrips">' + strips + '<div class="cBR">BR</div></div>' +
-  '</div>';
-}
-
-function buildMarks() {
-  marksEl.innerHTML = '';
-  V.marks = [];
-  if (!cfg.logo) return;
-  for (var p = 0; p < V.panels; p++) {
-    var cx = (p + 0.5) * V.panelW - V.OFF;
-    if (cx < -V.panelW * 0.5 || cx > V.W + V.panelW * 0.5) continue;
-
-    var pw = Math.min(V.panelW, V.W * 1.6);
-    /* Size the whole horizontal lockup, then derive its parts from that:
-       hex ~1.62x the cap height, gap ~0.42x, wordmark the rest. */
-    var lock = Math.max(240, Math.min(1400, Math.min(pw * 0.40, V.H * 0.75)));
-    var word = lock / 8.4;
-    var hexW = word * 1.62;
-    var gap  = word * 0.42;
-
-    var d = document.createElement('div');
-    d.className = 'mark' + (cfg.drift ? ' drift' : '');
-    d.style.left = Math.round(cx) + 'px';
-    d.style.top = V.markY + 'px';
-    d.style.animationDelay = (p * 0.9) + 's';
-
-    if (PLACEMAT_SRC) {                       // the full placemat, if embedded
-      var maxW = Math.min(pw * 0.78, V.W * 0.9);
-      var maxH = V.stripTop * 0.82;
-      d.innerHTML = '<img class="pm" src="' + PLACEMAT_SRC + '" alt="Bluerydge" ' +
-        'style="max-width:' + Math.round(maxW) + 'px;max-height:' + Math.round(maxH) + 'px">';
-      marksEl.appendChild(d);
-      continue;
-    }
-
-    if (cfg.card) {                           // reconstructed placemat card
-      var cardW = Math.min(pw * 0.72, V.W * 0.9, V.stripTop * 0.72 * 3.07);
-      d.className += ' nopulse';
-      d.innerHTML = placematCard(p, cardW);
-      marksEl.appendChild(d);
-      continue;
-    }
-
-    if (LOGO_SRC) {                           // the supplied lockup, if embedded
-      d.innerHTML = '<img class="pm" src="' + LOGO_SRC + '" alt="Bluerydge" ' +
-        'style="width:' + Math.round(lock) + 'px;max-width:' +
-        Math.round(V.W * 0.9) + 'px;max-height:' + Math.round(V.stripTop * 0.7) + 'px">';
-      marksEl.appendChild(d);
-      continue;
-    }
-
-    d.innerHTML =
-      logoSVG(p, Math.round(hexW)) +
-      '<div class="word" style="font-size:' + word.toFixed(1) + 'px;letter-spacing:' +
-        (word * 0.07).toFixed(2) + 'px;margin-left:' + gap.toFixed(0) + 'px">BLUERYDGE</div>';
-    marksEl.appendChild(d);
-  }
-  recordMarks();
-}
-
-/* Anchor points for the portal: the foot of each mark, in virtual coords. */
-function recordMarks() {
-  V.marks = [];
-  for (var i = 0; i < marksEl.children.length; i++) {
-    var el = marksEl.children[i], r = el.getBoundingClientRect();
-    var hex = el.querySelector('.hexwrap');
-    var hr = hex ? hex.getBoundingClientRect() : r;
-    V.marks.push({ el: el,
-      x: hr.left + hr.width / 2 + V.OFF,     // the mark itself is the doorway
-      y: hr.bottom - hr.height * 0.18 });
-  }
-}
-
-/* Flare the mark itself while a portal is open. */
-function flareMark(m, on) {
-  if (!m || !m.el) return;
-  if (on) m.el.classList.add('flare');
-  else m.el.classList.remove('flare');
-}
+var frameNo = 0;
 
 /* ---------------------------------------------------------------- sim --- */
 
 var actors = [], projs = [], parts = [], duels = [], graves = [], portals = [];
+var flyers = [], chests = [];
+var motes = [];
+var flyTimer = 40;
 var levelups = [], shocks = [], fireworks = [];
-var tally = { duel: 0, wrestle: 0, piggyback: 0, gang: 0, social: 0, ultimate: 0, deaths: 0 };
+var tally = { duel: 0, wrestle: 0, piggyback: 0, gang: 0, social: 0, ultimate: 0, deaths: 0,
+              spar: 0, greet: 0, chase: 0 };
 
 var GRAVE_LIFE = 30;     // seconds a marker stands before it fades
 var GRAVE_MAX = 10;      // never let the strip fill up with headstones
@@ -1505,6 +1753,7 @@ function startPass(a) {
   if (roll < 0.20) kind = 'glide';
   else if (roll < 0.36) kind = 'jet';
   else if (roll < 0.44) kind = 'blink';
+  if (a.s.passPref && roll < 0.75) kind = a.s.passPref;   // signature exit
 
   a.pass = { kind: kind, t: 0 };
   a.y = -0.01;
@@ -1549,6 +1798,24 @@ function stepPass(a, dt) {
   if (a.y >= 0) { a.pass = null; a.grav = 900; }
 }
 
+/* Every appearance rolls a personality — aggression, mischief, sociability,
+   courage, showmanship — seeded from who they are plus when they arrived.
+   Interactions are chosen by scoring, not by a fixed script, so the same two
+   fighters can duel one day and play piggyback the next. */
+var spawnSerial = 0;
+
+function rollTraits(spec) {
+  var h = 0, id = spec.id || 'x';
+  for (var c = 0; c < id.length; c++) h = (h * 31 + id.charCodeAt(c)) >>> 0;
+  var r = seeded(h + (++spawnSerial) * 7919);
+  return {
+    agg: 0.15 + r() * 0.7 + (spec.monster ? 0.3 : 0),
+    mis: r(), soc: r(),
+    cou: 0.2 + r() * 0.8 + (spec.heavy ? 0.15 : 0),
+    show: r()
+  };
+}
+
 function makeActor(dir, x) {
   var i = drawFromBag();
   var s = ROSTER[i];
@@ -1556,7 +1823,7 @@ function makeActor(dir, x) {
     i: i, s: s, dir: dir, face: dir,
     x: x, y: 0, vy: 0,
     speed: BASE_SPEED * V.S * s.spd * rnd(0.88, 1.12),
-    phase: RNG(), st: 'run',
+    phase: RNG(), st: 'run', tr: rollTraits(s),
     atkT: 0, struck: false, flash: 0, hurt: 0,
     cool: rnd(2, 14), duel: null, exit: false
   };
@@ -1575,22 +1842,211 @@ function residentCount() {
 }
 
 var lastDir = -1;
+var raidTimer = 20;              // seconds until the forest stirs again
+
+/* the creature bursts out — over a knocked-down hero, if the throw connected */
+function popBall(a, x, victim) {
+  a.st = 'run';
+  a.x = x; a.y = 0; a.vy = 0; a.grav = 900;
+  a.dir = RNG() < 0.5 ? 1 : -1; a.face = a.dir;
+  a.phase = RNG(); a.cool = rnd(2, 6);
+  a.holder = null; a.victim = null;
+  burst(x, V.groundY - 10 * V.S, 26, ['#ffffff', '#f2f4f6', a.s.c3 || '#9fe4ff'], 1.2);
+  if (victim) {
+    victim.hurt = 1; victim.flash = 0.15;
+    victim.vy = -260; victim.y = -0.01;
+    victim.dir = x > victim.x ? -1 : 1;               // bowled over, away from it
+    victim.face = -victim.dir;
+    victim.cool = rnd(6, 12);
+  }
+}
+
+function nearestChest(h) {
+  var best = null, bd = V.cellW * 9;
+  for (var i = 0; i < chests.length; i++) {
+    if (chests[i].st !== 'wait') continue;
+    var d = Math.abs(chests[i].x - h.x);
+    if (d < bd) { bd = d; best = chests[i]; }
+  }
+  return best;
+}
+
+/* the chest opens: one of three finds, announced like a level-up */
+function openChest(c, h) {
+  window.__chestOpened = true;
+  chests.splice(chests.indexOf(c), 1);
+  burst(c.x, V.groundY - 10 * V.S, 26, ['#ffd24d', '#fff2c0', '#ffffff', h.s.c3], 1.2);
+  var roll = RNG();
+  if (roll < 0.38) {
+    awardXP(h, 3);
+    levelups.push({ x: h.x, t: 0, col: '#ffd24d', big: false, text: 'TREASURE  +3XP' });
+  } else if (roll < 0.7) {
+    h.buffSpeed = 18; h.speed *= 1.5;
+    levelups.push({ x: h.x, t: 0, col: '#8ad8ff', big: false, text: 'SWIFT DRAUGHT' });
+  } else {
+    h.buffGrow = 18; h.bossScale = 1.28;
+    levelups.push({ x: h.x, t: 0, col: '#b06bff', big: false, text: 'GIANT ELIXIR' });
+  }
+  h.victory = 0.9;
+}
+
+function nearestBall(h) {
+  var best = null, bd = V.cellW * 9;
+  for (var i = 0; i < actors.length; i++) {
+    var B = actors[i];
+    if (B.st !== 'ball') continue;
+    var d = Math.abs(B.x - h.x);
+    if (d < bd) { bd = d; best = B; }
+  }
+  return best;
+}
+
+/* A guest's element, judged from its own colours — coarse but convincing:
+   embers, water, leaves, sparks, psychic motes, or plain grit. */
+function guestElement(spec) {
+  if (spec.elem) return spec.elem;
+  var c = spec.c3 || '#9fe4ff';
+  var n = parseInt(c.slice(1), 16);
+  var r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  var mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  var elem;
+  if (mx - mn < 30) elem = { cols: ['#e8e8e8', '#bfc4cc'], n: 8 };                    // normal
+  else if (r === mx && g > r * 0.6) elem = { cols: ['#ffe25e', '#fff6b0', '#ffffff'], n: 14 };  // electric
+  else if (r === mx) elem = { cols: ['#ff7a2e', '#ffb056', '#ffe0a0'], n: 14 };       // fire
+  else if (g === mx) elem = { cols: ['#6edb5e', '#b0f090', '#3f9e3f'], n: 12 };       // grass
+  else if (b === mx && r > b * 0.7) elem = { cols: ['#c86bff', '#ff8ae0', '#ffffff'], n: 12 }; // psychic
+  else elem = { cols: ['#4fa8ff', '#9fdcff', '#ffffff'], n: 14 };                     // water
+  spec.elem = elem;
+  return elem;
+}
+
+/* a ranged elemental hit: a streak of typed particles and an impact burst */
+function elementalStrike(a, tgt) {
+  var el = guestElement(a.s);
+  var y0 = V.groundY - FEET * V.S * 0.55;
+  var steps = 7, dx = (tgt.x - a.x) / steps;
+  for (var i = 1; i <= steps && parts.length < 280; i++) {
+    parts.push({ x: a.x + dx * i, y: y0 + Math.sin(i * 1.3) * 4 * V.S,
+                 vx: dx * 1.6, vy: rnd(-25, 25),
+                 life: 0.28, max: 0.28, c: pick(el.cols), sz: i % 2 ? 2 : 1 });
+  }
+  burst(tgt.x, y0, el.n, el.cols, 1);
+}
+
+/* Evolution. Every evolving guest jumps a whole level (wings-tier growth,
+   banner, the works). A creature that came out of a ball goes further: its
+   real next form is looked up and its sprite swapped in place. Every network
+   failure falls back to the growth-only evolution, silently. */
+function evolveGuest(a) {
+  var spec = a.s;
+  var lvl = spec.lvl || 0;
+  if (lvl < MAX_LEVEL) {
+    spec.xp = Math.max(spec.xp || 0, LEVEL_XP[lvl + 1]);
+    awardXP(a, 0);                               // recompute, rebake, banner
+  }
+  if (!spec.ball || spec.evolving || cfg.guests === 'off') return;
+  if (typeof fetch !== 'function') return;
+  spec.evolving = true;
+
+  var base = spec.name.toLowerCase();
+  fetch('https://pokeapi.co/api/v2/pokemon-species/' + encodeURIComponent(base),
+        { credentials: 'omit', mode: 'cors' })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(0); })
+    .then(function (sp) {
+      var url = sp.evolution_chain && sp.evolution_chain.url;
+      if (!url || !/^https:\/\/pokeapi\.co\//.test(url)) return Promise.reject(0);
+      return fetch(url, { credentials: 'omit', mode: 'cors' });
+    })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(0); })
+    .then(function (ch) {
+      function findNext(node) {
+        if (!node) return null;
+        if (node.species && node.species.name === base) {
+          return node.evolves_to && node.evolves_to[0] && node.evolves_to[0].species.name;
+        }
+        for (var i = 0; i < (node.evolves_to || []).length; i++) {
+          var hit = findNext(node.evolves_to[i]);
+          if (hit) return hit;
+        }
+        return null;
+      }
+      var next = findNext(ch.chain);
+      if (!next) return Promise.reject(0);       // already the final form
+      return fetch('https://pokeapi.co/api/v2/pokemon/' + encodeURIComponent(next),
+                   { credentials: 'omit', mode: 'cors' })
+        .then(function (r) { return r.ok ? r.json() : Promise.reject(0); })
+        .then(function (j) {
+          var sprite = j.sprites && j.sprites.front_default;
+          if (!sprite || !spriteAllowed(sprite, [])) return Promise.reject(0);
+          return loadImage(sprite).then(function (img) {
+            var m = measureSprite(img);
+            spec.img = img;
+            spec.sx0 = m.sx0; spec.sy0 = m.sy0; spec.sw = m.sw; spec.sh = m.sh;
+            var tallest = 27 * (spec.wanted || 1) * 1.12;   // its new form is bigger
+            var ratio = m.sw / m.sh;
+            spec.dh = tallest; spec.dw = tallest * ratio;
+            if (spec.dw > GUEST_MAX_W) { spec.dw = GUEST_MAX_W; spec.dh = GUEST_MAX_W / ratio; }
+            spec.name = cleanName(next);
+            if (m.c3) { spec.c3 = m.c3; spec.elem = null; }
+            if (bakedAt) sheets[a.i] = bakeGuestSheets(spec, bakedAt);
+            levelups.push({ x: a.x, t: 0, col: spec.c3, big: true, text: 'EVOLVED  ' + spec.name });
+            burst(a.x, V.groundY - FEET * V.S * 0.6, 30, ['#ffffff', spec.c3], 1.4);
+          });
+        });
+    })
+    .catch(function () { /* growth-only evolution stands */ })
+    .then(function () { spec.evolving = false; });
+}
+
+function monstersAlive() {
+  var n = 0;
+  for (var i = 0; i < actors.length; i++) {
+    if (actors[i].s.monster && actors[i].st !== 'down') n++;
+  }
+  return n;
+}
+
+/* Occasionally the pack is led by a boss: half again as big, three times the
+   hp, its own title, and a heavier reward for the heroes who fell it. */
+function spawnRaid() {
+  var bench = [];
+  for (var i = 0; i < ROSTER.length; i++) if (ROSTER[i].monster) bench.push(i);
+  if (!bench.length) return;
+  var n = 1 + ((RNG() * 3) | 0);
+  var dir = RNG() < 0.5 ? 1 : -1;                      // they arrive as a pack
+  var boss = RNG() < 0.22;
+  for (var k = 0; k < n; k++) {
+    var idx = bench[(RNG() * bench.length) | 0];
+    var a = makeActor(dir, 0);
+    a.i = idx; a.s = ROSTER[idx];
+    a.speed = BASE_SPEED * V.S * a.s.spd * rnd(0.9, 1.1);
+    a.x = dir > 0 ? -V.cellW - k * V.cellW * 0.8 : V.VW + V.cellW + k * V.cellW * 0.8;
+    a.hp = a.s.hp;
+    a.strike = rnd(0.8, 1.6);
+    if (boss && k === 0) {
+      a.boss = 1;
+      a.hp = a.s.hp * 3;
+      a.speed *= 0.85;
+      a.bossScale = 1.5;
+      a.title = a.s.name + ' KING';
+    }
+    actors.push(a);
+  }
+}
 
 /* Guests arrive through the mark: it flares, a column of light opens, and
    they drop out of it onto the floor line. */
 function portalSpawn(a) {
-  if (!cfg.portal || !V.marks || !V.marks.length) return false;
-  var m = V.marks[(RNG() * V.marks.length) | 0];
-  if (!m) return false;
+  if (!cfg.portal || !V.sun) return false;
+  var mouthY = V.sun.y + V.sun.r * 0.9;
   a.st = 'portal';
   a.pt = 0;
-  a.x = m.x + rnd(-14, 14);
-  a.y = (m.y - V.groundY) + 6;              // above the floor line, at the mark
+  a.x = V.sun.x + rnd(-10, 10);
+  a.y = (mouthY - V.groundY) + 6;           // at the portal's mouth, in the sky
   a.vy = 0;
-  a.mark = m;
   a.face = a.dir;
-  portals.push({ m: m, x: a.x, t: 0, life: 1.5 });
-  flareMark(m, true);
+  portals.push({ m: { y: mouthY }, x: a.x, t: 0, life: 1.6 });
+  portalFlare();
   return true;
 }
 
@@ -1650,17 +2106,38 @@ function tryDuel() {
         if (c.dir === b.dir && Math.abs(c.x - b.x) < V.cellW * 5) { ally = c; lead = b; mark = a; break; }
       }
 
-      var roll = RNG();
-      if (a.s.grappler || b.s.grappler) {          // a grappler grapples
-        if (roll < 0.62) { startBout('wrestle', a, b); return; }
-      }
-      if (roll < 0.22) {                           // 0.00 - 0.22
-        if (ally) startGang(lead, ally, mark); else startBout('wrestle', a, b);
+      /* The director. Score every interaction from both personalities and
+         the situation, add noise, take the best. */
+      var ta = a.tr || (a.tr = rollTraits(a.s));
+      var tb = b.tr || (b.tr = rollTraits(b.s));
+      var la = a.s.lvl || 0, lb = b.s.lvl || 0;
+      var nz = function () { return RNG() * 0.35; };
+      var scores = {
+        duel:   (ta.agg + tb.agg) * 0.45 + Math.abs(la - lb) * 0.05 + nz(),
+        wrestle:(ta.agg + tb.agg) * 0.3 + ((a.s.grappler || b.s.grappler) ? 0.55 : 0) + nz(),
+        gang:   ally ? (ta.agg + tb.agg) * 0.3 + 0.25 + nz() : -1,
+        piggy:  (ta.soc + tb.soc) * 0.32 + (ta.mis + tb.mis) * 0.18 + nz(),
+        spar:   (ta.soc + tb.soc) * 0.35 + (2 - ta.agg - tb.agg) * 0.18 + nz(),
+        greet:  (ta.soc + tb.soc) * 0.4 - (ta.agg + tb.agg) * 0.15 + nz(),
+        chase:  (Math.max(ta.mis, tb.mis)) * 0.6 + nz(),
+        flee:   (lb - la >= 2 ? (1 - ta.cou) * 0.9 : (la - lb >= 2 ? (1 - tb.cou) * 0.9 : -1)) + nz() * 0.5
+      };
+      var best = 'duel', bs = -9;
+      for (var key in scores) if (scores[key] > bs) { bs = scores[key]; best = key; }
+
+      if (best === 'gang') { startGang(lead, ally, mark); return; }
+      if (best === 'wrestle') { startBout('wrestle', a, b); return; }
+      if (best === 'piggy') { startPiggyback(a, b); return; }
+      if (best === 'spar') { startBout('duel', a, b, true); return; }
+      if (best === 'greet') { startGreet(a, b); return; }
+      if (best === 'chase') { startChase(ta.mis >= tb.mis ? a : b, ta.mis >= tb.mis ? b : a); return; }
+      if (best === 'flee') {
+        var runner = lb - la >= 2 ? a : b;
+        runner.dir = -runner.dir; runner.face = runner.dir;
+        runner.cool = rnd(8, 16); runner.spooked = 1.6;
         return;
       }
-      if (roll < 0.44) { startBout('wrestle', a, b); return; }      // 0.22 - 0.44
-      if (roll < 0.60) { startPiggyback(a, b); return; }            // 0.44 - 0.60
-      startBout('duel', a, b);                                      // 0.60 - 1.00
+            startBout('duel', a, b);                                      // 0.60 - 1.00
       return;
     }
   }
@@ -1671,11 +2148,14 @@ function faceOff(a, b) {
   b.face = -a.face;
 }
 
-function startBout(kind, a, b) {
+function startBout(kind, a, b, spar) {
+  var agg = ((a.tr ? a.tr.agg : 0.5) + (b.tr ? b.tr.agg : 0.5)) / 2;
+  var show = ((a.tr ? a.tr.show : 0.5) + (b.tr ? b.tr.show : 0.5)) / 2;
   var d = { kind: kind, a: a, b: b, t: 0, next: kind === 'wrestle' ? 0.4 : 0.35,
-            k: 0, n: 3 + ((RNG() * 3) | 0), over: 0,
+            k: 0, n: 2 + Math.round(agg * 3 + show * 2), over: 0, spar: !!spar,
+            cadence: 0.34 + (1 - agg) * 0.4,
             lockA: a.x, lockB: b.x };
-  tally[kind]++;
+  tally[spar ? 'spar' : kind]++;
   a.duel = b.duel = d;
   a.st = b.st = (kind === 'wrestle' ? 'wrestle' : 'duel');
   faceOff(a, b);
@@ -1711,6 +2191,29 @@ function startPiggyback(a, b) {
   duels.push(d);
 }
 
+/* Two sociable fighters stop, face each other, and hop a hello. */
+function startGreet(a, b) {
+  tally.greet = (tally.greet || 0) + 1;
+  a.st = b.st = 'greet';
+  a.greetT = b.greetT = 1.5;
+  faceOff(a, b);
+  a.vy = -150; a.y = -0.01;
+  b.vy = -150; b.y = -0.01;
+}
+
+/* One darts off with a burst of mischief; the other gives chase for a while,
+   then they both drop it and carry on. */
+function startChase(imp, quarry) {
+  tally.chase = (tally.chase || 0) + 1;
+  imp.st = 'chasing'; quarry.st = 'chased';
+  imp.chaseT = quarry.chaseT = rnd(2.6, 4.6);
+  imp.other = quarry; quarry.other = imp;
+  quarry.dir = quarry.x < imp.x ? -1 : 1;      // away
+  quarry.face = quarry.dir;
+  imp.dir = quarry.dir; imp.face = imp.dir;
+  burst(imp.x, V.groundY - FEET * V.S * 0.8, 8, [imp.s.c3, '#ffffff'], 0.5);
+}
+
 /* Nobody picks a fight with a final form: they tag along or steer clear. */
 function startSocial(a, b) {
   tally.social++;
@@ -1738,6 +2241,11 @@ function releaseCast(d) {
 }
 
 function endDuel(d, noKill) {
+  if (d.spar && !noKill) {                     // a friendly bout: both bow out
+    releaseCast(d);
+    d.a.victory = 1.0; d.b.victory = 1.0;
+    return;
+  }
   if (d.kind && d.kind !== 'duel') { releaseCast(d); return; }
   /* a higher level wins more often, but never certainly */
   var la = (d.a.s.lvl || 0), lb = (d.b.s.lvl || 0);
@@ -1789,12 +2297,86 @@ function stepSim(dt) {
   clock += dt;
   var GY = V.groundY;
 
-  /* population */
+  /* population (raiders are extras, not part of the four) */
   var want = wantCount();
-  if (actors.length < want && RNG() < dt * 3) spawn(false);
+  var civilians = 0;
+  for (var ci0 = 0; ci0 < actors.length; ci0++) if (!actors[ci0].s.monster) civilians++;
+  if (civilians < want && RNG() < dt * 3) spawn(false);
+
+  /* ambient motes: leaves over the forest, spray at the gorge, pollen and
+     fireflies by the village — a dozen drifting points, nothing more */
+  if (!cfg.still) {
+    var wantMotes = Math.min(14, Math.round(V.VW / 300));
+    if (motes.length < wantMotes && RNG() < dt * 2) {
+      var mu = RNG(), kindRoll = bu(mu);
+      var gorge = layout().mirror ? 1 - layout().gorgeU : layout().gorgeU;
+      var mk2;
+      if (Math.abs(mu - gorge) < 0.06) mk2 = { c: '#dff2f6', sway: 3, fall: 14, tw: 1 };
+      else if (wForest(mu) > 0.5) mk2 = { c: RNG() < 0.5 ? '#7ec46a' : '#c8a94d', sway: 9, fall: 9, tw: 0 };
+      else mk2 = { c: nightAmt(V.sun.hour) > 0.5 ? '#d8ff8a' : '#fff0b8', sway: 5, fall: 3, tw: 1 };
+      motes.push({ x: mu * V.VW, y: V.stripTop + RNG() * (V.groundY - V.stripTop) * 0.5,
+                   t: RNG() * 7, k: mk2, life: 12 + RNG() * 10 });
+    }
+    for (var mo = motes.length - 1; mo >= 0; mo--) {
+      var MT = motes[mo];
+      MT.t += dt; MT.life -= dt;
+      MT.x += Math.sin(MT.t * 1.3) * MT.k.sway * dt * V.U;
+      MT.y += MT.k.fall * dt * V.U;
+      if (MT.life <= 0 || MT.y > V.groundY - 2) motes.splice(mo, 1);
+    }
+  }
+
+  /* flyovers: something big crosses the sky and lets a chest go */
+  if (!cfg.still) {
+    flyTimer -= dt;
+    if (flyTimer <= 0 && flyers.length === 0) {
+      flyTimer = 55 + RNG() * 100;
+      var fdir = RNG() < 0.5 ? 1 : -1;
+      flyers.push({
+        kind: pick(['eagle', 'dragon', 'insect']),
+        x: fdir > 0 ? -300 : V.VW + 300,
+        y: V.H * (0.10 + RNG() * 0.12),
+        vx: fdir * (V.H * (0.14 + RNG() * 0.08)),
+        t: 0, flap: RNG() * 7,
+        dropX: V.VW * (0.2 + RNG() * 0.6),
+        dropped: false
+      });
+    }
+  }
+  for (var fy = flyers.length - 1; fy >= 0; fy--) {
+    var F = flyers[fy];
+    F.t += dt; F.x += F.vx * dt; F.flap += dt * (F.kind === 'insect' ? 26 : (F.kind === 'dragon' ? 4.5 : 8));
+    if (!F.dropped && ((F.vx > 0 && F.x >= F.dropX) || (F.vx < 0 && F.x <= F.dropX))) {
+      F.dropped = true;
+      chests.push({ x: F.x, y: F.y, vy: 0, st: 'fall', t: 0, spin: RNG() * 7 });
+    }
+    if (F.x < -400 || F.x > V.VW + 400) flyers.splice(fy, 1);
+  }
+  for (var ch2 = chests.length - 1; ch2 >= 0; ch2--) {
+    var C = chests[ch2];
+    C.t += dt;
+    if (C.st === 'fall') {
+      C.vy += 800 * dt; C.y += C.vy * dt; C.spin += dt * 5;
+      if (C.y >= V.groundY - 6 * V.S) {
+        C.y = V.groundY - 6 * V.S; C.st = 'wait'; C.t = 0;
+        burst(C.x, V.groundY - 6 * V.S, 10, ['#c8a05e', '#8a6a3a', '#ffffff'], 0.7);
+      }
+    } else if (C.t > 45) {
+      chests.splice(ch2, 1);                     // unclaimed, reclaimed by moss
+    }
+  }
+
+  /* raids */
+  var raiders = monstersAlive();
+  if (cfg.raids && cfg.duels) {
+    if (raiders === 0) {
+      raidTimer -= dt;
+      if (raidTimer <= 0) { spawnRaid(); raidTimer = 50 + RNG() * 90; }
+    }
+  }
 
   scanT -= dt;
-  if (scanT <= 0) { scanT = 0.3; tryDuel(); }
+  if (scanT <= 0) { scanT = 0.3; if (!raiders) tryDuel(); }
 
   for (var i = actors.length - 1; i >= 0; i--) {
     var a = actors[i], s = a.s;
@@ -1802,6 +2384,18 @@ function stepSim(dt) {
     a.hurt = Math.max(0, a.hurt - dt);
     a.cool -= dt;
     if (a.spooked) a.spooked = Math.max(0, a.spooked - dt);
+    if (a.buffSpeed) {
+      a.buffSpeed -= dt;
+      if (parts.length < 240 && RNG() < dt * 8) {
+        parts.push({ x: a.x - a.face * 8 * V.S, y: V.groundY - rnd(2, 18) * V.S,
+                     vx: -a.face * 40, vy: rnd(-30, 0), life: 0.4, max: 0.4, c: '#8ad8ff', sz: 1 });
+      }
+      if (a.buffSpeed <= 0) { a.buffSpeed = 0; a.speed /= 1.5; }
+    }
+    if (a.buffGrow) {
+      a.buffGrow -= dt;
+      if (a.buffGrow <= 0) { a.buffGrow = 0; a.bossScale = a.boss ? 1.5 : undefined; }
+    }
 
     if (a.pass) stepPass(a, dt);
     if (a.y < 0 || a.vy < 0) {
@@ -1810,7 +2404,99 @@ function stepSim(dt) {
       if (a.y >= 0) { a.y = 0; a.vy = 0; a.grav = 900; if (a.pass) a.pass = null; }
     }
 
-    if (a.st === 'run') {
+    if (a.st === 'run' && !a.s.monster && !a.duel && monstersAlive()) {
+      /* a raid: every hero drops what it is doing and closes on the nearest
+         monster; they gang it from both sides and cut it down together */
+      var tgt = null, best = 1e9;
+      for (var mi = 0; mi < actors.length; mi++) {
+        var M = actors[mi];
+        if (!M.s.monster || M.st === 'down') continue;
+        var dd = Math.abs(M.x - a.x);
+        if (dd < best) { best = dd; tgt = M; }
+      }
+      if (tgt) {
+        a.rest = 0; a.victory = 0;
+        var reach = (a.s.guest || a.s.elem) ? V.cellW * 1.9 : V.cellW * 0.72;
+        if (best > reach) {
+          a.dir = tgt.x > a.x ? 1 : -1; a.face = a.dir;
+          var hdx = a.dir * a.speed * 1.15 * dt;
+          a.x += hdx;
+          a.phase = (a.phase + Math.abs(hdx) / (ANIM_CYCLE_ART * V.S)) % 1;
+        } else {
+          a.face = tgt.x > a.x ? 1 : -1;
+          a.strike = (a.strike || 0) - dt;
+          if (a.strike <= 0) {
+            a.strike = 0.7 + RNG() * 0.5;
+            a.atkT = 0.36;
+            tgt.hp -= 1;
+            tgt.flash = 0.12; tgt.hurt = 0.3;
+            if (a.s.guest || a.s.elem) elementalStrike(a, tgt);
+            else burst((a.x + tgt.x) / 2, V.groundY - FEET * V.S * 0.55, 10,
+                  [a.s.c3, tgt.s.c3, '#ffffff'], 0.8);
+            if (tgt.hp <= 0 && tgt.st !== 'down') {
+              tgt.st = 'down'; tgt.fall = 0; tgt.hurt = 1; tgt.flash = 0.15;
+              tgt.vy = -240; tgt.y = -0.01; tgt.knock = -tgt.face * 90;
+              if (tgt.boss) shocks.push({ x: tgt.x, t: 0, col: tgt.s.c3, life: 0.9 });
+              if (a.s.guest) evolveGuest(a);          // the killing blow evolves it
+              /* everyone who joined the hunt shares the kill */
+              for (var hx2 = 0; hx2 < actors.length; hx2++) {
+                var H2 = actors[hx2];
+                if (H2.s.monster || H2.st === 'down') continue;
+                if (Math.abs(H2.x - tgt.x) < V.cellW * 4) {
+                  awardXP(H2, tgt.boss ? 3 : 1);
+                  H2.victory = 1.0;
+                }
+              }
+            }
+          }
+        }
+      }
+    } else if (a.st === 'run' && a.s.monster) {
+      /* the monster lumbers at the nearest hero and swings back */
+      var prey = null, pb = 1e9;
+      for (var pi2 = 0; pi2 < actors.length; pi2++) {
+        var Hh = actors[pi2];
+        if (Hh.s.monster || Hh.st === 'down' || Hh.st === 'portal') continue;
+        var pd = Math.abs(Hh.x - a.x);
+        if (pd < pb) { pb = pd; prey = Hh; }
+      }
+      if (prey) {
+        if (pb > V.cellW * 0.6) {
+          a.dir = prey.x > a.x ? 1 : -1; a.face = a.dir;
+          var mdx = a.dir * a.speed * dt;
+          a.x += mdx;
+          a.phase = (a.phase + Math.abs(mdx) / (ANIM_CYCLE_ART * V.S)) % 1;
+        } else {
+          a.face = prey.x > a.x ? 1 : -1;
+          a.strike = (a.strike || 1) - dt;
+          if (a.strike <= 0) {
+            a.strike = 1.1 + RNG() * 0.7;
+            a.atkT = 0.36;
+            prey.flash = 0.12; prey.hurt = 0.35;
+            burst(prey.x, V.groundY - FEET * V.S * 0.5, 8, [a.s.c3, '#ffffff'], 0.7);
+            if (RNG() < (a.boss ? 0.14 : 0.06) && prey.st === 'run') {
+              prey.st = 'down'; prey.fall = 0; prey.hurt = 1;
+              prey.vy = -220; prey.y = -0.01; prey.knock = -prey.face * 80;
+            }
+          }
+        }
+      } else if (a.x < -margin() || a.x > V.VW + margin()) {
+        actors.splice(i, 1); continue;
+      }
+    } else if (a.st === 'run' && !a.s.monster && !a.duel && !a.pass && !(a.victory > 0) && (nearestBall(a) || nearestChest(a))) {
+      var bb = nearestBall(a), cc = nearestChest(a);
+      var goal = (bb && cc) ? (Math.abs(bb.x - a.x) < Math.abs(cc.x - a.x) ? bb : cc) : (bb || cc);
+      if (Math.abs(goal.x - a.x) > V.cellW * 0.25) {
+        a.dir = goal.x > a.x ? 1 : -1; a.face = a.dir;
+        var bdx = a.dir * a.speed * dt;
+        a.x += bdx;
+        a.phase = (a.phase + Math.abs(bdx) / (ANIM_CYCLE_ART * V.S)) % 1;
+      } else if (goal === bb) {                // scooped up the ball
+        bb.st = 'held'; bb.holder = a; bb.throwT = 0.9;
+      } else {
+        openChest(goal, a);
+      }
+    } else if (a.st === 'run') {
       if (a.victory > 0) {                    // a beat to enjoy the win
         a.victory -= dt;
         a.phase = (a.phase + dt * 1.4) % 1;
@@ -1819,6 +2505,8 @@ function stepSim(dt) {
                        vx: rnd(-25, 25), vy: rnd(-70, -20),
                        life: 0.5, max: 0.5, c: a.s.c3, sz: 1 });
         }
+      } else if (a.pause > 0) {               // holding the ball, lining it up
+        a.pause -= dt;
       } else if (a.rest > 0) {                // stopped for a breather
         a.rest -= dt;
         a.phase = (a.phase + dt * 0.55) % 1;
@@ -1848,6 +2536,68 @@ function stepSim(dt) {
 
     } else if (a.st === 'duel') {
       a.phase = (a.phase + dt * 1.1) % 1;
+    } else if (a.st === 'ball') {
+      a.ballT += dt; a.pt += dt;
+      if (a.ballT > 22) popBall(a, a.x, null);       // nobody came; let it out
+    } else if (a.st === 'held') {
+      var hold = a.holder;
+      if (!hold || hold.st !== 'run' || actors.indexOf(hold) < 0) {
+        a.st = 'ball'; a.ballT = 0; a.holder = null;  // dropped
+      } else {
+        a.x = hold.x; hold.rest = 0; hold.victory = 0;
+        hold.pause = 0.1;                             // holder stands still
+        a.throwT -= dt;
+        if (a.throwT <= 0) {
+          var mark2 = null, mb = 1e9;
+          for (var ti = 0; ti < actors.length; ti++) {
+            var T = actors[ti];
+            if (T === hold || T.s.monster || T.duel) continue;
+            if (T.st !== 'run' && T.st !== 'carry') continue;
+            var td = Math.abs(T.x - hold.x);
+            if (td > V.cellW * 1.2 && td < mb) { mb = td; mark2 = T; }
+          }
+          if (mark2) {                                // let fly, leading the runner
+            a.st = 'thrown';
+            hold.atkT = 0.36;
+            hold.face = mark2.x > hold.x ? 1 : -1;
+            a.bx = hold.x + hold.face * 10 * V.S;
+            a.by = -FEET * V.S * 0.9;
+            var tof = 0.7;
+            var lead = mark2.st === 'run' ? mark2.dir * mark2.speed * tof : 0;
+            a.bvx = (mark2.x + lead - a.bx) / tof;
+            a.bvy = -300;
+            a.victim = mark2;
+            a.holder = null;
+          } else {
+            a.st = 'ball'; a.ballT = 0; a.holder = null;
+          }
+        }
+      }
+    } else if (a.st === 'thrown') {
+      a.bvy += 900 * dt;
+      a.bx += a.bvx * dt; a.by += a.bvy * dt;
+      a.pt += dt;
+      a.x = a.bx;
+      var vT = a.victim;
+      var hitV = vT && actors.indexOf(vT) >= 0 && vT.st === 'run' &&
+                 Math.abs(vT.x - a.bx) < V.cellW * 0.65 && a.by > -V.cellH * 0.95;
+      if (hitV || a.by >= 0) {
+        popBall(a, a.bx, hitV ? vT : null);
+      }
+    } else if (a.st === 'greet') {
+      a.greetT -= dt;
+      a.phase = (a.phase + dt * 0.8) % 1;
+      if (a.greetT <= 0) { a.st = 'run'; a.face = a.dir; a.cool = rnd(6, 14); }
+    } else if (a.st === 'chasing' || a.st === 'chased') {
+      a.chaseT -= dt;
+      var boost = a.st === 'chasing' ? 1.35 : 1.25;
+      var cdx2 = a.dir * a.speed * boost * dt;
+      a.x += cdx2;
+      a.phase = (a.phase + Math.abs(cdx2) / (ANIM_CYCLE_ART * V.S)) % 1;
+      if (a.st === 'chasing' && a.other) { a.dir = a.other.x > a.x ? 1 : -1; a.face = a.dir; }
+      if (a.chaseT <= 0 || !a.other || actors.indexOf(a.other) < 0) {
+        a.st = 'run'; a.other = null; a.cool = rnd(6, 14);
+      }
     } else if (a.st === 'wrestle') {
       a.phase = (a.phase + dt * 1.6) % 1;
     } else if (a.st === 'carry') {
@@ -1871,18 +2621,30 @@ function stepSim(dt) {
         a.y += a.vy * dt;
       }
       if (a.y >= 0) {
-        a.y = 0; a.vy = 0; a.st = 'run';
-        a.phase = RNG();
-        a.cool = rnd(2, 6);
-        burst(a.x, V.groundY - 2, 16, [a.s.c3, '#ffffff', '#9fe4ff'], 0.8);
-        flareMark(a.mark, false);
-        a.mark = null;
+        a.y = 0; a.vy = 0;
+        if (a.s.ball) {
+          if (RNG() < 0.55) {                  // sits in the grass, waiting
+            a.st = 'ball'; a.ballT = 0; a.pt = 0;
+            burst(a.x, V.groundY - 6 * V.S, 8, ['#ffffff', a.s.c3 || '#9fe4ff'], 0.5);
+          } else {
+            popBall(a, a.x, null);
+          }
+        } else {
+          a.st = 'run';
+          a.phase = RNG();
+          a.cool = rnd(2, 6);
+          burst(a.x, V.groundY - 2, 16, [a.s.c3, '#ffffff', '#9fe4ff'], 0.8);
+        }
       }
     } else if (a.st === 'down') {
       a.fall += dt;
       if (a.fall < 0.45) a.x += a.knock * dt;        // slide back from the blow
       if (a.fall >= 1.15) {                          // toppled, faded — mark the spot
-        bury(a);
+        if (a.s.monster) {
+          burst(a.x, V.groundY - 8 * V.S, 18, [a.s.c1, a.s.c3, '#ffffff'], 0.9);
+        } else {
+          bury(a);
+        }
         actors.splice(i, 1);
         continue;
       }
@@ -1892,7 +2654,7 @@ function stepSim(dt) {
        everyone else is culled once well clear. This has to sit outside the
        per-state branches — a carrier in a piggyback walks off just as easily
        as a runner does. */
-    if (a.st !== 'down' && a.st !== 'portal') {
+    if (a.st !== 'down' && a.st !== 'portal' && a.st !== 'ball' && a.st !== 'held' && a.st !== 'thrown') {
       if (isFinal(a.s) && residentCount() <= 2) {
         if (a.x < V.cellW * 0.6) { a.dir = 1; if (a.st !== 'ride') a.face = 1; }
         else if (a.x > V.VW - V.cellW * 0.6) { a.dir = -1; if (a.st !== 'ride') a.face = -1; }
@@ -2026,7 +2788,7 @@ function stepSim(dt) {
       var att2 = (d.k % 2) ? d.b : d.a;
       att2.atkT = 0.36; att2.struck = false;
       if (att2.s.ranged && RNG() < 0.4) fire(att2);
-      d.k++; d.next = d.t + 0.52;
+      d.k++; d.next = d.t + (d.cadence || 0.52);
       if (d.k >= d.n) d.over = d.t + 0.75;
     }
   }
@@ -2081,7 +2843,7 @@ function stepSim(dt) {
   for (var pi = portals.length - 1; pi >= 0; pi--) {
     var pv = portals[pi];
     pv.t += dt;
-    if (pv.t >= pv.life) { flareMark(pv.m, false); portals.splice(pi, 1); }
+    if (pv.t >= pv.life) portals.splice(pi, 1);
   }
 
   /* graves */
@@ -2111,7 +2873,7 @@ function composeStill(seed) {
   try {
     actors.length = 0; projs.length = 0; parts.length = 0; duels.length = 0;
     graves.length = 0; portals.length = 0; levelups.length = 0; shocks.length = 0;
-    fireworks.length = 0;
+    fireworks.length = 0; flyers.length = 0; chests.length = 0; motes.length = 0;
 
     var n = Math.max(2, cfg.count);
     var slot = V.VW / n;
@@ -2161,6 +2923,8 @@ function frameIndex(a) {
   if (a.victory > 0) return (a.victory * 5 | 0) % 2 ? F_ATK + 1 : F_IDLE + (Math.floor(a.phase * 4) % 4);
   if (a.rest > 0) return F_IDLE + (Math.floor(a.phase * 4) % 4);
   if (a.st === 'wrestle') return F_ATK + (Math.floor(a.phase * 4) % 2);
+  if (a.st === 'greet') return F_IDLE + (Math.floor(a.phase * 4) % 4);
+  if (a.st === 'chasing' || a.st === 'chased') return F_RUN + (Math.floor(a.phase * 8) % 8);
   if (a.st === 'ride' || a.st === 'mounting') return F_IDLE + (Math.floor(a.phase * 4) % 4);
   if (a.st === 'carry') return F_RUN + (Math.floor(a.phase * 8) % 8);
   if (a.st === 'duel') return F_IDLE + (Math.floor(a.phase * 4) % 4);
@@ -2175,62 +2939,9 @@ function draw() {
 
   var gy = GY - top;                                    // ground line in strip space
 
-  /* light pulses sliding along the arena floor */
-  fg.globalCompositeOperation = 'lighter';
-  for (var i = 0; i < 3; i++) {
-    var span = V.VW + 400;
-    var px = ((clock * (90 + i * 55) + i * 900) % span) - 200 - OFF;
-    var gwidth = 130 + i * 40;
-    fg.globalAlpha = 0.16;
-    fg.drawImage(glowBlob(i === 1 ? '#00e5ff' : '#3aa0ff'), px - gwidth / 2, gy - 9, gwidth, 18);
-  }
-  fg.globalAlpha = 1;
-  fg.globalCompositeOperation = 'source-over';
 
-  /* portal light: a column from the mark down to the floor, with a ring at
-     the mouth. Drawn before the fighters so a guest falls through it. */
-  if (portals.length) {
-    fg.globalCompositeOperation = 'lighter';
-    for (var pz = 0; pz < portals.length; pz++) {
-      var pv = portals[pz], px = pv.x - OFF;
-      if (px < -200 || px > W + 200) continue;
-      var open = Math.min(1, pv.t / 0.22);
-      var fade = Math.max(0, 1 - Math.max(0, pv.t - (pv.life - 0.5)) / 0.5);
-      var my = (pv.m.y - top);
-      var colW = (16 + 44 * open) * V.S * 0.5;
-
-      var beam = fg.createLinearGradient(0, my, 0, gy);
-      beam.addColorStop(0, 'rgba(150,235,255,' + (0.5 * fade).toFixed(3) + ')');
-      beam.addColorStop(0.55, 'rgba(60,170,255,' + (0.18 * fade).toFixed(3) + ')');
-      beam.addColorStop(1, 'rgba(40,140,255,0)');
-      fg.fillStyle = beam;
-      fg.beginPath();
-      fg.moveTo(px - colW * 0.5, my);
-      fg.lineTo(px + colW * 0.5, my);
-      fg.lineTo(px + colW * 1.25, gy);
-      fg.lineTo(px - colW * 1.25, gy);
-      fg.closePath();
-      fg.fill();
-
-      fg.globalAlpha = fade;
-      fg.drawImage(glowBlob('#7fe8ff'), px - colW * 1.6, my - colW * 0.7, colW * 3.2, colW * 1.4);
-      fg.globalAlpha = 1;
-
-      /* mouth ring, snapping open then settling */
-      var rw = colW * (1.35 + 0.5 * Math.sin(Math.min(1, pv.t / 0.3) * Math.PI));
-      fg.strokeStyle = 'rgba(190,245,255,' + (0.85 * fade * open).toFixed(3) + ')';
-      fg.lineWidth = Math.max(1.5, 1.6 * V.S);
-      fg.beginPath();
-      fg.ellipse(px, my, rw, rw * 0.3, 0, 0, Math.PI * 2);
-      fg.stroke();
-
-      /* landing pool */
-      fg.globalAlpha = 0.35 * fade;
-      fg.drawImage(glowBlob('#7fe8ff'), px - colW * 1.8, gy - 10 * V.S, colW * 3.6, 20 * V.S);
-      fg.globalAlpha = 1;
-    }
-    fg.globalCompositeOperation = 'source-over';
-  }
+  drawBeamLayer();
+  drawSkyLayer();
 
   /* fighters, far-to-near by travel direction so crossings read cleanly */
   var vis = [];
@@ -2332,16 +3043,22 @@ function draw() {
     }
 
     if (f.st === 'portal') {
-      var drop = Math.min(1, Math.max(0, (f.pt - 0.32) / 0.35));
-      fg.save();
-      fg.globalAlpha = Math.min(1, f.pt / 0.18);
-      fg.translate(Math.round(cx), Math.round(cy));
-      fg.scale(1 - 0.12 * (1 - drop), 1 + 0.10 * (1 - drop));
-      fg.drawImage(sheet, F_IDLE * sh.cw, 0, sh.cw, sh.ch,
-                   Math.round(-MIDX * V.S), Math.round(-FEET * V.S),
-                   V.cellW, V.cellH);
-      fg.restore();
-      fg.globalAlpha = 1;
+      continue;                                 // drawn on the beam layer
+    } else if (f.st === 'ball' || f.st === 'held' || f.st === 'thrown') {
+      var br = 7 * V.S;
+      var bxp, byp;
+      if (f.st === 'ball') {
+        bxp = cx; byp = gy - br - Math.abs(Math.sin(f.pt * 2.2)) * 2 * V.S;
+        fg.globalAlpha = 0.4;
+        fg.drawImage(glowBlob(f.s.c3 || '#9fe4ff'), cx - br * 2, gy - br * 1.6, br * 4, br * 2);
+        fg.globalAlpha = 1;
+      } else if (f.st === 'held' && f.holder) {
+        bxp = f.holder.x - OFF; byp = gy - V.cellH * (f.holder.s.grow || 1) - br * 0.6;
+      } else {
+        bxp = f.bx - OFF; byp = gy + f.by;
+      }
+      drawBall(fg, bxp, byp, br, f.st === 'ball' ? 0 : f.pt * 9);
+      continue;
     } else if (f.st === 'down') {
       /* topple onto the deck over ~0.55s, then fade out */
       var tp = Math.min(1, f.fall / 0.55);
@@ -2355,12 +3072,41 @@ function draw() {
                    V.cellW, V.cellH);
       fg.restore();
       fg.globalAlpha = 1;
+    } else if (f.bossScale) {
+      var bs = f.bossScale;
+      fg.drawImage(sheet, fi * sh.cw, 0, sh.cw, sh.ch,
+                   Math.round(cx - MIDX * V.S * bs), Math.round(cy - FEET * V.S * bs),
+                   V.cellW * bs, V.cellH * bs);
     } else {
       fg.drawImage(sheet, fi * sh.cw, 0, sh.cw, sh.ch,
                    Math.round(cx - MIDX * V.S), Math.round(cy - FEET * V.S),
                    V.cellW, V.cellH);
       fg.globalAlpha = 1;
     }
+  }
+
+  /* ambient motes */
+  for (var am = 0; am < motes.length; am++) {
+    var MT2 = motes[am], amx = MT2.x - OFF;
+    if (amx < -6 || amx > W + 6) continue;
+    var aal = Math.min(1, MT2.life / 2) * (MT2.k.tw ? 0.45 + 0.45 * Math.sin(MT2.t * 4) : 0.7);
+    if (aal <= 0.03) continue;
+    fg.globalAlpha = aal;
+    fg.fillStyle = MT2.k.c;
+    fg.fillRect(amx, MT2.y - top, 2, 2);
+  }
+  fg.globalAlpha = 1;
+
+  /* waiting treasure chests */
+  for (var tc = 0; tc < chests.length; tc++) {
+    var TC = chests[tc];
+    if (TC.st !== 'wait') continue;
+    var tcx = TC.x - OFF;
+    if (tcx < -40 || tcx > W + 40) continue;
+    fg.globalAlpha = 0.45 + 0.25 * Math.sin(clock * 3 + TC.x);
+    fg.drawImage(glowBlob('#ffd24d'), tcx - 16 * V.S, gy - 18 * V.S, 32 * V.S, 20 * V.S);
+    fg.globalAlpha = 1;
+    drawChestBox(fg, tcx, gy - 7 * V.S, V.S * 0.7, 0);
   }
 
   /* grave markers — they stand for GRAVE_LIFE seconds, then fade */
@@ -2489,7 +3235,7 @@ function draw() {
      on a backing chip so the text stays readable over any background. */
   var plated = [];
   for (var pl = 0; pl < actors.length; pl++) {
-    if (isFinal(actors[pl].s) && actors[pl].st !== 'down') plated.push(actors[pl]);
+    if ((isFinal(actors[pl].s) || actors[pl].s.monster) && actors[pl].st !== 'down') plated.push(actors[pl]);
   }
   if (duels.length || plated.length) {
     var fs = Math.max(8, Math.round(3.6 * V.S));
@@ -2519,9 +3265,9 @@ function draw() {
         if (tx < -220 || tx > W + 220) continue;
 
         var lvl = f2.s.lvl || 0;
-        var label = f2.s.name + (lvl ? '  L' + lvl : '');
+        var label = f2.title || (f2.s.monster ? f2.s.name : f2.s.name + (lvl ? '  L' + lvl : ''));
         var tw = fg.measureText(label).width;
-        var ty = gy - FEET * V.S * (f2.s.grow || 1) - 9 * V.S;
+        var ty = gy - FEET * V.S * (f2.s.grow || 1) * (f2.bossScale || 1) - 9 * V.S;
 
         fg.globalAlpha = fade * 0.72;                     // backing chip
         fg.fillStyle = 'rgba(3,9,18,0.9)';
@@ -2538,6 +3284,193 @@ function draw() {
     }
     fg.globalAlpha = 1;
     fg.textBaseline = 'alphabetic';
+  }
+}
+
+/* A capture ball: white shell, coloured lid, dark band, pale button. Drawn
+   from scratch — it reads as "creature container" without copying anyone. */
+function drawBall(ctx, x, y, r, rot, lid) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot || 0);
+  ctx.fillStyle = '#f2f4f6';
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill();
+  ctx.fillStyle = lid || '#e03434';
+  ctx.beginPath(); ctx.arc(0, 0, r, Math.PI, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#20242c';
+  ctx.fillRect(-r, -r * 0.16, r * 2, r * 0.32);
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.34, 0, 7); ctx.fill();
+  ctx.fillStyle = '#eef2f6';
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.19, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.stroke();
+  ctx.restore();
+}
+
+var skyOn = false;
+
+function drawFlyer(ctx, F) {
+  var U = V.U, x = F.x - V.OFF, y = F.y + Math.sin(F.t * 1.7) * 6 * U;
+  var d = F.vx > 0 ? 1 : -1;
+  var nite = nightAmt(V.sun.hour);
+  var body = mix('#2c3038', '#0a0c10', nite * 0.5);
+  var wingA = Math.sin(F.flap);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(d, 1);
+  ctx.fillStyle = body;
+  ctx.strokeStyle = body;
+  ctx.lineCap = 'round';
+  if (F.kind === 'eagle') {
+    ctx.lineWidth = 4 * U;
+    ctx.beginPath(); ctx.ellipse(0, 0, 14 * U, 5 * U, 0, 0, 7); ctx.fill();     // body
+    ctx.beginPath(); ctx.moveTo(10 * U, -2 * U); ctx.lineTo(17 * U, 0); ctx.lineTo(10 * U, 2 * U); ctx.fill();
+    for (var w = -1; w <= 1; w += 2) {
+      ctx.beginPath();
+      ctx.moveTo(-2 * U, 0);
+      ctx.quadraticCurveTo(-6 * U, w * (-16 - wingA * 12) * U * 0.5, -20 * U, w * (-22 - wingA * 16) * U * 0.5);
+      ctx.stroke();
+    }
+  } else if (F.kind === 'dragon') {
+    ctx.lineWidth = 6 * U;
+    ctx.beginPath(); ctx.ellipse(0, 0, 22 * U, 8 * U, 0, 0, 7); ctx.fill();     // body
+    ctx.beginPath(); ctx.moveTo(18 * U, -2 * U); ctx.quadraticCurveTo(30 * U, -8 * U, 36 * U, -4 * U); ctx.stroke();  // neck
+    ctx.beginPath(); ctx.ellipse(38 * U, -5 * U, 6 * U, 4 * U, 0, 0, 7); ctx.fill();  // head
+    ctx.beginPath(); ctx.moveTo(-18 * U, 0); ctx.quadraticCurveTo(-34 * U, 4 * U, -44 * U, -2 * U); ctx.stroke();     // tail
+    for (var w2 = -1; w2 <= 1; w2 += 2) {
+      ctx.beginPath();
+      ctx.moveTo(0, -2 * U);
+      ctx.quadraticCurveTo(-4 * U, (-26 - wingA * 18) * U, -26 * U, (-30 - wingA * 22) * U);
+      ctx.lineTo(-18 * U, -6 * U);
+      ctx.closePath(); ctx.fill();
+      break;                                     // one big visible wing reads best
+    }
+    if (Math.sin(F.t * 0.9) > 0.7) {             // the occasional ember puff
+      ctx.fillStyle = 'rgba(255,140,60,0.7)';
+      ctx.beginPath(); ctx.arc(46 * U, -4 * U, (2 + Math.sin(F.t * 12)) * U, 0, 7); ctx.fill();
+    }
+  } else {                                       // giant insect
+    ctx.beginPath(); ctx.ellipse(0, 0, 12 * U, 5 * U, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(-11 * U, 1 * U, 7 * U, 4 * U, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = 0.5;
+    for (var w3 = -1; w3 <= 1; w3 += 2) {
+      ctx.beginPath();
+      ctx.ellipse(-2 * U, w3 * 8 * U * Math.abs(wingA), 10 * U, 4 * U, wingA * 0.6 * w3, 0, 7);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+
+function drawChestBox(ctx, x, y, U, spin) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (spin) ctx.rotate(spin);
+  ctx.fillStyle = '#131010';
+  ctx.fillRect(-8 * U, -6.5 * U, 16 * U, 13 * U);
+  ctx.fillStyle = '#7a5230';
+  ctx.fillRect(-7 * U, -5.5 * U, 14 * U, 11 * U);
+  ctx.fillStyle = '#9a6a3e';
+  ctx.fillRect(-7 * U, -5.5 * U, 14 * U, 4 * U);
+  ctx.fillStyle = '#ffd24d';
+  ctx.fillRect(-7 * U, -1.5 * U, 14 * U, 2 * U);
+  ctx.fillRect(-1.5 * U, -2.5 * U, 3 * U, 4 * U);
+  ctx.restore();
+}
+
+function drawSkyLayer() {
+  var active = flyers.length > 0;
+  if (!active) {
+    for (var ci = 0; ci < chests.length; ci++) if (chests[ci].st === 'fall') { active = true; break; }
+  }
+  if (!active) {
+    if (skyOn) { skyEl.style.display = 'none'; skyOn = false; }
+    return;
+  }
+  if (!skyOn) { skyEl.style.display = 'block'; skyOn = true; }
+  sy.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+  sy.clearRect(0, 0, V.W, V.groundY);
+  for (var f = 0; f < flyers.length; f++) drawFlyer(sy, flyers[f]);
+  for (var c = 0; c < chests.length; c++) {
+    var C = chests[c];
+    if (C.st !== 'fall') continue;
+    drawChestBox(sy, C.x - V.OFF, C.y, V.S * 0.7, C.spin);
+  }
+}
+
+var beamOn = false;
+
+function drawBeamLayer() {
+  var active = portals.length > 0;
+  if (!active) {
+    for (var i0 = 0; i0 < actors.length; i0++) {
+      if (actors[i0].st === 'portal') { active = true; break; }
+    }
+  }
+  if (!active) {
+    if (beamOn) { beamEl.style.display = 'none'; beamOn = false; }
+    return;
+  }
+  if (!beamOn) { beamEl.style.display = 'block'; beamOn = true; }
+
+  var G = V.groundY, L = V.beamL, W2 = V.beamW;
+  bg.setTransform(V.dpr, 0, 0, V.dpr, 0, 0);
+  bg.clearRect(0, 0, W2, G);
+  bg.imageSmoothingEnabled = false;
+  bg.globalCompositeOperation = 'lighter';
+
+  for (var pz = 0; pz < portals.length; pz++) {
+    var pv = portals[pz], px = pv.x - V.OFF - L;
+    var open = Math.min(1, pv.t / 0.22);
+    var fade = Math.max(0, 1 - Math.max(0, pv.t - (pv.life - 0.5)) / 0.5);
+    var my = pv.m.y;
+    var colW = (16 + 44 * open) * V.S * 0.5;
+    var bt = V.sun.day ? ['255,228,160', '255,190,90'] : ['200,220,255', '140,170,255'];
+    var beam = bg.createLinearGradient(0, my, 0, G);
+    beam.addColorStop(0, 'rgba(' + bt[0] + ',' + (0.55 * fade).toFixed(3) + ')');
+    beam.addColorStop(0.55, 'rgba(' + bt[1] + ',' + (0.18 * fade).toFixed(3) + ')');
+    beam.addColorStop(1, 'rgba(' + bt[1] + ',0)');
+    bg.fillStyle = beam;
+    bg.beginPath();
+    bg.moveTo(px - colW * 0.5, my);
+    bg.lineTo(px + colW * 0.5, my);
+    bg.lineTo(px + colW * 1.25, G);
+    bg.lineTo(px - colW * 1.25, G);
+    bg.closePath(); bg.fill();
+
+    bg.globalAlpha = fade;
+    bg.drawImage(glowBlob(V.sun.day ? '#ffd27a' : '#a8c4ff'), px - colW * 1.6, my - colW * 0.7, colW * 3.2, colW * 1.4);
+    var rw = colW * (1.35 + 0.5 * Math.sin(Math.min(1, pv.t / 0.3) * Math.PI));
+    bg.strokeStyle = 'rgba(' + (V.sun.day ? '255,240,200' : '210,225,255') + ',' + (0.85 * fade * open).toFixed(3) + ')';
+    bg.lineWidth = Math.max(1.5, 1.6 * V.S);
+    bg.beginPath(); bg.ellipse(px, my, rw, rw * 0.3, 0, 0, Math.PI * 2); bg.stroke();
+    bg.globalAlpha = 0.35 * fade;
+    bg.drawImage(glowBlob(V.sun.day ? '#ffd27a' : '#a8c4ff'), px - colW * 1.8, G - 10 * V.S, colW * 3.6, 20 * V.S);
+    bg.globalAlpha = 1;
+  }
+  bg.globalCompositeOperation = 'source-over';
+
+  /* the falling arrival itself */
+  for (var fi2 = 0; fi2 < actors.length; fi2++) {
+    var f = actors[fi2];
+    if (f.st !== 'portal') continue;
+    var sh = sheets[f.i];
+    var cx = f.x - V.OFF - L, cy = G + f.y;
+    if (f.s.ball) {
+      drawBall(bg, cx, cy - 8 * V.S, 7 * V.S, f.pt * 9);
+    } else if (sh) {
+      var drop = Math.min(1, Math.max(0, (f.pt - 0.32) / 0.35));
+      bg.save();
+      bg.globalAlpha = Math.min(1, f.pt / 0.18);
+      bg.translate(Math.round(cx), Math.round(cy));
+      bg.scale(1 - 0.12 * (1 - drop), 1 + 0.10 * (1 - drop));
+      bg.drawImage(f.face > 0 ? sh.right : sh.left, F_IDLE * sh.cw, 0, sh.cw, sh.ch,
+                   Math.round(-MIDX * V.S), Math.round(-FEET * V.S), V.cellW, V.cellH);
+      bg.restore();
+      bg.globalAlpha = 1;
+    }
   }
 }
 
@@ -2561,8 +3494,11 @@ function loop(ts) {
   var step = acc; acc = 0;
 
   try {
+    frameNo++;
     stepSim(step);
     draw();
+    portalTick(step);
+    if ((frameNo & 255) === 0) ensurePortal();     // the sun moves with the clock
     failures = 0;
   } catch (e) {
     console.error('[arena] frame', e);
@@ -2630,7 +3566,7 @@ function normaliseGuest(raw, extraHosts) {
     guest: true, id: 'guest:' + name, name: name,
     url: new URL(sprite, GUEST_ENDPOINT || location.href).href,
     c3: col, wanted: num(raw.scale, 0.5, 1.6, 1),
-    spd: num(raw.speed, 0.4, 2, 1), ranged: !!raw.ranged
+    spd: num(raw.speed, 0.4, 2, 1), ranged: !!raw.ranged, ball: !!raw.ball
   };
 }
 
@@ -2804,7 +3740,7 @@ function pokeapiRoster(n) {
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (j) {
         var sp = j && j.sprites && j.sprites.front_default;
-        return sp ? { name: j.name, sprite: sp, scale: 1,
+        return sp ? { name: j.name, sprite: sp, scale: 1, ball: true,
                       speed: 0.8 + RNG() * 0.5, ranged: RNG() < 0.3 } : null;
       })
       .catch(function () { return null; });
@@ -2867,7 +3803,7 @@ var relayoutT = null;
 function relayout(rebake) {
   measure();
   paintScene();
-  buildMarks();
+  ensurePortal();
   gradeEl.className = cfg.grain ? '' : 'nogr';
 
   var K = cfg.scale * V.dprInt;
@@ -2882,6 +3818,7 @@ function ready() {
     document.body.classList.add('still');
     composeStill(cfg.still);
     draw();
+    portalTick(0.016, true);
     dismissBoot();
     document.body.classList.add('idle');
     window.__arenaStill = true;          // export tooling waits on this
@@ -2983,7 +3920,7 @@ function renderBoard() {
   var el = document.getElementById('panel');
   if (!el) return;
   var fields = ['screens', 'scale', 'taskbar', 'count', 'fps'];
-  var flags = ['duels', 'levels', 'portal', 'ambient', 'logo', 'grain'];
+  var flags = ['duels', 'raids', 'levels', 'portal', 'ambient', 'grain'];
 
   function sync() {
     fields.forEach(function (k) {
@@ -3081,6 +4018,17 @@ try {
       tally: function () { return tally; },
       sources: SOURCES,
       award: awardXP,
+      forceRaid: function () { spawnRaid(); },
+      spawnFlyer: function (kind) {
+        flyers.push({ kind: kind, x: -200, y: V.H * 0.15, vx: V.H * 0.35,
+                      t: 0, flap: 0, dropX: V.VW * 0.45, dropped: false });
+      },
+      flyState: function () {
+        return { flying: flyers.length > 0,
+                 chestAny: chests.length > 0,
+                 chestWaiting: chests.some(function (c) { return c.st === 'wait'; }),
+                 opened: window.__chestOpened || false };
+      },
       portalTest: function () {                 // force a guest through the mark
         var gi = [];
         for (var i = 0; i < ROSTER.length; i++) if (ROSTER[i].guest) gi.push(i);

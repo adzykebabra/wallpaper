@@ -7,4 +7,4 @@
 # http://localhost:PORT is accepted for local testing only, and the build
 # prints a warning so a dev build is never shipped by accident.
 
-https://api.bluerydge.com/arena/roster.json
+https://api.example.com/arena/roster.json

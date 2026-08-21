@@ -24,13 +24,13 @@ const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium';
   fs.mkdirSync(outDir, { recursive: true });
 
   const browser = await chromium.launch({ executablePath: CHROME });
-  const file = 'file://' + path.resolve(__dirname, '..', 'Bluerydge_Arena_Wallpaper.html');
+  const file = 'file://' + path.resolve(__dirname, '..', 'Portal_Valley_Wallpaper.html');
 
   for (const [w, h] of sizes) {
     const q = new URLSearchParams({
       still: seed,
       screens: '1',                                   // a lock screen is one display
-      logoy: process.env.LOGOY || '0.58',             // clear of the Windows clock
+      hour: process.env.HOUR || '10',                 // fix the light for the export
       taskbar: process.env.TASKBAR || String(Math.round(h * 0.075)),
       scale: process.env.SCALE || String(Math.max(2, Math.min(5, Math.round(h / 500)))),
       count: process.env.COUNT || '4',                // COUNT=10 for a full lineup
@@ -42,7 +42,7 @@ const CHROME = process.env.CHROME || '/opt/pw-browsers/chromium';
     await page.goto(file + '?' + q, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__arenaStill === true, null, { timeout: 30000 });
     await page.waitForTimeout(250);
-    const out = path.join(outDir, `bluerydge_arena_${w}x${h}.png`);
+    const out = path.join(outDir, `portal_valley_${w}x${h}.png`);
     await page.screenshot({ path: out });
     await page.close();
     console.log(`${errs.length ? 'ERRORS ' + errs.join('; ') + ' ' : ''}${out}`);

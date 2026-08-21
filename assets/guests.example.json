@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "hosts": ["cdn.bluerydge.com"],
+  "hosts": ["cdn.example.com"],
   "characters": [
     {
       "name": "SENTINEL",
-      "sprite": "https://cdn.bluerydge.com/arena/sentinel.png",
+      "sprite": "https://cdn.example.com/arena/sentinel.png",
       "color": "#50c8ff",
       "scale": 1,
       "speed": 1,
@@ -12,7 +12,7 @@
     },
     {
       "name": "WARDEN",
-      "sprite": "https://cdn.bluerydge.com/arena/warden.png",
+      "sprite": "https://cdn.example.com/arena/warden.png",
       "scale": 1.1,
       "speed": 0.9,
       "ranged": true

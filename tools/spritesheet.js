@@ -6,7 +6,7 @@ const path = require('path');
   const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const p = await b.newPage({ viewport: { width: 1400, height: 900 }, deviceScaleFactor: 1 });
   p.on('pageerror', e => console.log('ERR', e.message));
-  await p.goto('file://' + path.resolve('Bluerydge_Arena_Wallpaper.html') + '?debug=1&scale=' + K + '&logo=0', { waitUntil: 'load' });
+  await p.goto('file://' + path.resolve('Portal_Valley_Wallpaper.html') + '?debug=1&scale=' + K + '', { waitUntil: 'load' });
   await p.waitForFunction(() => window.__arena && window.__arena.sheets().filter(Boolean).length === window.__arena.roster.length, null, { timeout: 15000 });
   const png = await p.evaluate(() => {
     const A = window.__arena, sh = A.sheets(), R = A.roster;

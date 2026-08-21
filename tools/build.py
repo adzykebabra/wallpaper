@@ -9,39 +9,11 @@ and Rajdhani 700) so the wallpaper works with no network access at all.
 import base64, json, os, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "Bluerydge_Arena_Wallpaper.html")
+OUT = os.path.join(ROOT, "Portal_Valley_Wallpaper.html")
 
 def read(*parts):
     with open(os.path.join(ROOT, *parts), encoding="utf8") as f:
         return f.read()
-
-# .svg first: a vector lockup stays sharp at every size, unlike a bitmap
-ASSET_MIME = {
-    ".svg": "image/svg+xml", ".png": "image/png", ".webp": "image/webp",
-    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif",
-}
-
-
-def asset_data_uri(stem, label):
-    """Inline assets/<stem>.(svg|png|webp|jpg) if it has been dropped in.
-
-    Optional. Without it the wallpaper draws its own artwork, which stays
-    sharp at any resolution; with it, the supplied file is used verbatim.
-    """
-    for ext, mime in ASSET_MIME.items():
-        path = os.path.join(ROOT, "assets", stem + ext)
-        if not os.path.exists(path):
-            continue
-        with open(path, "rb") as f:
-            raw = f.read()
-        print("%s: assets/%s%s (%.1f KB)" % (label, stem, ext, len(raw) / 1024))
-        return "data:%s;base64,%s" % (mime, base64.b64encode(raw).decode("ascii"))
-    return ""
-
-
-def placemat_data_uri():
-    return asset_data_uri("placemat", "  placemat")
-
 
 def guest_endpoint():
     """Read assets/guests-endpoint.txt, if present.
@@ -76,20 +48,22 @@ def main():
     tpl = read("src", "wallpaper.template.html")
     app = read("src", "app.js")
     fonts = json.loads(read("assets", "fonts.json"))
-    app = app.replace("__PLACEMAT_SRC__", placemat_data_uri())
     app = app.replace("__GUEST_ENDPOINT__", guest_endpoint())
-    app = app.replace("__LOGO_SRC__", asset_data_uri("logo", "  logo"))
 
     if "</script>" in app:
         sys.exit("app.js must not contain a literal </script>")
 
+    three = read("assets", "three.min.js")
+    if "</scr" + "ipt" in three:
+        sys.exit("three.min.js contains a script terminator")
     html = (tpl
             .replace("__FONT_PRESSSTART__", fonts["pressstart"])
             .replace("__FONT_RAJDHANI__", fonts["rajdhani700"])
+            .replace("__THREE_JS__", three)
             .replace("__APP_JS__", app))
 
     for token in ("__FONT_PRESSSTART__", "__FONT_RAJDHANI__", "__APP_JS__",
-                  "__PLACEMAT_SRC__", "__GUEST_ENDPOINT__", "__LOGO_SRC__"):
+                  "__GUEST_ENDPOINT__", "__THREE_JS__"):
         if token in html:
             sys.exit("unsubstituted token: " + token)
 

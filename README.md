@@ -1,405 +1,143 @@
-# Bluerydge Arena — dual-monitor animated wallpaper
+# Portal Valley — dual-monitor animated wallpaper
 
-A single self-contained HTML file. Open
-**`Bluerydge_Arena_Wallpaper.html`** in any modern browser, or point a
-wallpaper engine (Lively, Wallpaper Engine, Plash, `xwinwrap`, …) at it.
+A single self-contained HTML file. Open **`Portal_Valley_Wallpaper.html`** in
+any modern browser, or point a wallpaper engine (Lively, Wallpaper Engine,
+Plash, `xwinwrap`, …) at it.
 
-Pixel-art fighters run along the top edge of the taskbar, right across both
-screens — four at a time, drawn from a roster of sixteen so you rarely see
-the same one twice in a row. When two meet head-on they duel; the loser goes
-down and leaves a headstone or a cross that stands for thirty seconds before
-fading. The Bluerydge mark sits centred on each monitor, over the brand's
-hex-lattice and halftone background.
+A painted valley runs continuously across your monitors, changing biome from
+left to right — deep rainforest, a waterfall gorge at the centre of the span,
+then terraced fields and a stilt village. Pixel-art fighters run along the top
+edge of the taskbar; guests drop in from a slowly turning **pentagonal portal
+in the sky, rendered with three.js, which is the sun by day and the moon by
+night** and keeps real hours: rising on the left, peaking at midday or
+midnight, setting on the right. The whole scene follows the clock — stars and
+lit hut windows at night, a violet cast at dawn and dusk.
 
-No network access, no frameworks, no build step required — the fonts are
-embedded as base64 woff2, so it renders identically offline.
+Works fully offline. Fonts and three.js are embedded; with guests off it makes
+no network request at all.
 
 ## Setup
 
-**One instance spanning both monitors** (the default). Nothing to
-configure — the wallpaper divides the desktop into two panels and puts a
-logo on each. If you run three or four screens, add `?screens=3`.
-
-**One instance per monitor** — for engines that drive each display
-separately. Give the left screen `?screen=left` and the right one
-`?screen=right` (or `?panel=0`, `?panel=1`, … for more than two). Each
-window then renders its own slice of the same wide scene, so the skyline
-and floor line up across the bezel. The two instances keep independent
-clocks, so a fighter crossing the seam won't match up frame-for-frame.
-
-## Lively Wallpaper
-
-**As a wallpaper.** Lively → **+** (Add Wallpaper) → paste the path to
-`Bluerydge_Arena_Wallpaper.html`, or drag the file into the window. Choose
-**Web page** if prompted. To pass settings, either append them to the file
-path (`…\Bluerydge_Arena_Wallpaper.html?taskbar=40&count=6`) or just press
-**H** on the running wallpaper — Lively forwards keyboard input and the
-choices are saved locally.
-
-Under Lively → Settings → **Wallpaper**, set *Wallpaper input* to
-**Desktop** so the H key reaches the page, and pick your span behaviour:
-*Same wallpaper on all screens* vs *Span across all screens*. Span mode
-pairs with the default `screens=2`; per-screen mode pairs with
-`?screen=left` / `?screen=right`.
-
-**As a screensaver.** Lively can run this animated page as a real Windows
-screensaver — no static image needed. It is a one-time setup:
-
-1. In Lively, go to **Library → Active Wallpapers → Screensaver**, and click
-   *One time setup required to run screensaver*.
-2. That points you at `lively_utility_screensaver.zip`. Extract it, copy the
-   `.scr` file to `C:\Windows\Lively.scr`, right-click it and choose
-   **Install**.
-3. Windows opens its Screen Saver settings — pick **Lively**, set your wait
-   time, **OK**.
-
-Two caveats worth knowing: on the **Microsoft Store** build of Lively, the
-app has to stay running in the background for the screensaver to fire (the
-installer build doesn't need this), and some antivirus tools flag any `.scr`
-as a false positive.
-
-For screensaver duty add **`?drift=1`**. The logo then creeps slowly around
-its position over a few minutes, so an OLED never bakes a static wordmark
-into the panel. The fighters already move constantly, and the scene is dark,
-which is what Lively's own docs recommend for burn-in.
-
-## Lock screen
-
-The Windows lock screen only accepts a **static image** — no engine, Lively
-included, can run HTML there. Pre-rendered stills are in `lockscreen/`:
-
-    lockscreen/bluerydge_arena_1920x1080.png
-    lockscreen/bluerydge_arena_2560x1440.png
-    lockscreen/bluerydge_arena_3440x1440.png
-    lockscreen/bluerydge_arena_3840x2160.png
-
-**Settings → Personalization → Lock screen → Personalize your lock screen →
-Picture → Browse photos**, and pick the one matching your primary monitor.
-The same file works under *Background → Picture* if you ever want a static
-desktop too.
-
-These are not screenshots — `?still=<seed>` composes the frame deliberately:
-fighters spaced evenly, strides varied, a duel staged off-centre, and the
-logo dropped to 58% height so the Windows clock doesn't land on it. The same
-seed always renders the same image.
-
-To render your own size, or a different composition:
-
-    npm install --no-save playwright
-    node tools/export.js 3440x1440
-    SEED=12 COUNT=10 LOGOY=0.62 node tools/export.js
-
-## Brand artwork
-
-The background is drawn from the Bluerydge placemat's own visual language —
-near-black navy, a loose hex lattice, halftone dot fields biased to the panel
-edges, node-and-connector detail — and the centred lockup is the hexagon mark
-(crimson outer ring, cyan inner ring, upward chevron) over the wordmark. It is
-all drawn in vector/canvas, so it stays sharp from 1080p to 4K.
-
-### Dropping in the real artwork
-
-Two slots, both optional. Put a file in `assets/` and rebuild:
-
-    python3 tools/build.py
-
-| File | Replaces |
-|------|----------|
-| `assets/logo.svg` (or `.png`/`.webp`/`.jpg`) | The drawn lockup — your exact mark, on every monitor |
-| `assets/placemat.png` (or `.svg`/`.webp`/`.jpg`) | The whole centred card, including the photo strips |
-
-The build inlines whichever it finds as a data URI, so the wallpaper stays a
-single offline file. A placemat wins over a logo; a logo wins over the drawn
-mark. Nothing else changes — the fighters still run along the taskbar in
-front. Delete the file and rebuild to go back to the drawn version.
-
-**Prefer `.svg` for the logo.** A vector lockup stays sharp from a 1080p
-laptop to a 4K panel; a small PNG will be upscaled and go soft.
-
-## Encounters
-
-Meeting head-on does not always mean a fight:
-
-| | |
-|---|---|
-| **Duel** | trade blows; the loser goes down |
-| **Wrestle** | lock up, shove, and one gets thrown — fatal about two times in three |
-| **Piggyback** | one climbs on the other and they travel together for a while, then part |
-| **Gang-up** | if a third is running with one of them, two take on one |
-| **Ultimate** | the outnumbered one can turn it around — a charge, a shockwave, and both attackers go down at once. More likely the higher their level |
-
-A grappler always prefers to wrestle. Everyone in a scrap is labelled while it
-lasts, on a backing chip so the name stays readable over any background.
-
-## Getting past each other
-
-Two fighters heading opposite ways do not just clip through. Most of the time
-one vaults, but occasionally something better happens:
-
-| | |
-|---|---|
-| **Vault** | a plain hop over — the common case |
-| **Glide** | wings snap out at the top of the arc and they float across |
-| **Jetpack** | a thruster lights, they fly the gap on an exhaust trail |
-| **Blink** | gone in a puff, back on the other side |
-
-The wings, the pack and the ghost trail only exist for the length of the move,
-so they are drawn live rather than baked into anyone's sprite sheet.
-
-## Progression
-
-A win is experience, experience is levels, and every level bolts something new
-onto the fighter. Progress is per character, not per appearance, so a fighter
-carries their record across the session and through a reload.
-
-| Level | Wins | Gains |
-|-------|------|-------|
-| 1 | 1 | a cape |
-| 2 | 2 | a better weapon |
-| 3 | 4 | **evolution** — wings, brighter palette, larger |
-| 4 | 7 | shoulder plates, a shield, a longer cape |
-| 5 | 10 | bulk, larger again |
-| 6 | 14 | **final form** — royal crown, full cape, scythe, aura |
-
-Beating someone above you is worth more than beating someone below, and a
-fighter with a record is drafted more often, so a run builds instead of being
-spread thin across the cast.
-
-**A final form holds the field.** It stops leaving at the edges and patrols
-instead, and nobody picks a fight with it — they either give it a wide berth
-or fall in alongside it. At most two champions camp at once; beyond that they
-come and go like everyone else.
-
-Use `?seedxp=14` to see the final forms straight away, or `?levels=0` to turn
-the whole system off.
-
-## Small life
-
-Winners take a beat to enjoy it — a little flourish and a spray of sparks
-before they run on. Reaching final form earns a firework volley over the new
-champion. And once in a while a fighter simply stops for a breather, looks
-around, and carries on; the parade reads as alive rather than mechanical.
-
-## Fallen fighters
-
-Losing a duel is fatal. The loser is knocked back, topples, fades, and a
-marker rises where they fell — a stone headstone or a wooden cross, picked at
-random, glowing faintly in that fighter's colour with their name above it for
-a few seconds. Markers stand for **30 seconds**, fade over the last two, and
-are capped at ten so the strip never fills up. A replacement fighter walks on
-straight away, so there are always four.
-
-Set `?duels=0` if you would rather nobody fought at all.
-
-## Guest fighters
-
-The wallpaper drafts extra fighters from live sources, and they arrive
-through the mark. **The default is `mix`** — half endless procedural robots
-(RoboHash), half creature sprites (PokéAPI, ~1,000 ids) — so new faces keep
-coming out of the portal. If either source is down the other still delivers,
-and if both are unreachable you simply get the built-in cast: every failure
-is silent.
-
-    ?guests=mix         robots + creatures (default)
-    ?guests=robohash    endless procedurally generated robots and monsters
-    ?guests=pokeapi     ~1,000 creature sprites
-    ?guests=endpoint    your own hosted roster
-    ?guests=off         never touch the network
-
-**`?guests=off` is the no-network switch.** With it set (or with `endpoint`
-and no endpoint configured) the file makes zero requests, which is verified
-in the checks. Note the licensing section below before shipping the default
-anywhere public-facing.
-
-### Which sources actually work
-
-The constraint is not the API, it is the sprite. To run along the taskbar at a
-uniform height a character needs a **transparent background and a full body** —
-then it can be trimmed to its content and scaled. An opaque portrait renders as
-a floating rectangle. Checked directly:
-
-| Source | Auth | CORS | Sprite | Usable |
-|--------|------|------|--------|--------|
-| [RoboHash](https://robohash.org) | none | `*` | 128px RGBA, transparent, full body | **yes** |
-| [PokéAPI](https://pokeapi.co) | none | `*` | 96px palette PNG with alpha, full body | **yes** |
-| [DiceBear](https://dicebear.com) | none | `*` | transparent SVG, but bust/head only | heads only |
-| [Rick and Morty API](https://rickandmortyapi.com) | none | `*` | **JPEG — no alpha**, opaque portrait | no |
-| Superhero API | key | — | photographic | no |
-
-There is no single "characters from every universe" sprite database with an
-open API and clean licensing — that does not exist. RoboHash is the closest
-thing to endless, because every seed string is a distinct character.
-
-### Licensing, before you ship this
-
-* **RoboHash** images are CC-BY. Free for commercial use **with attribution** —
-  the robot sets are by Zikri Kader, the monsters by Hrvoje Novakovic, and the
-  other sets by Julian Peter Arias and David Revoy. Credit them wherever this
-  wallpaper is distributed.
-* **PokéAPI** serves Nintendo/Game Freak artwork. Fine on your own desktop;
-  putting it on a company-branded wallpaper that clients might see is a
-  trademark and copyright question for someone at Bluerydge to answer, not a
-  technical one. It is opt-in for that reason.
-* For a commercial deployment the clean options are a **CC0 pack**
-  ([Kenney](https://kenney.nl), OpenGameArt filtered to CC0) served from your
-  own host, or artwork you commission — either way via `?guests=endpoint`.
-
-### Your own roster endpoint
-
-Put your URL in `assets/guests-endpoint.txt` (see the `.example` beside it)
-and rebuild. It must be `https://`; `http://localhost:PORT` is accepted for
-local testing and the build prints a warning so a dev build is never shipped
-by accident.
-
-### Manifest
-
-    {
-      "version": 1,
-      "hosts": ["cdn.bluerydge.com"],
-      "characters": [
-        { "name": "SENTINEL",
-          "sprite": "https://cdn.bluerydge.com/arena/sentinel.png",
-          "color": "#50c8ff",
-          "scale": 1, "speed": 1, "ranged": false }
-      ]
-    }
-
-| Field    | Required | Notes |
-|----------|----------|-------|
-| `name`   | yes | Shown on duel plates and gravestones. Trimmed to 14 printable ASCII chars, uppercased |
-| `sprite` | yes | PNG/WebP with transparency, or a `data:` URI. Relative URLs resolve against the endpoint |
-| `color`  | no  | `#rrggbb` glow colour. **Omit it and it is sampled from the sprite's own pixels** |
-| `scale`  | no  | 0.5–1.6, relative to a standard fighter |
-| `speed`  | no  | 0.4–2.0 |
-| `ranged` | no  | Whether they take pot-shots |
-| `hosts`  | no  | Extra hosts sprites may load from, besides the endpoint's own |
-
-Sprites are trimmed of transparent margin so their feet land on the floor
-line, scaled to fighter height, and given a neon halo in their colour.
-Nearest-neighbour is used when upscaling and bilinear when downscaling, so
-pixel art stays crisp and large art stays smooth.
-
-### What it does and doesn't do
-
-Guests are **a single still image**, so they cannot have a real run cycle the
-way the built-in sixteen do — those are drawn skeletons with articulated
-limbs and eighteen baked frames each. Guests get procedural motion instead:
-a bounding hop, squash on the footfall, a little tilt, a lunge to attack.
-At 56 px tall this reads correctly. Everything else treats them identically —
-they enter the shuffled bag, duel, die, and leave a gravestone.
-
-### Behaviour and limits
-
-* Fetched on startup, then re-polled every 30 minutes, and only while the
-  page is visible.
-* The last good roster is cached in `localStorage`, so guests still appear
-  when the machine boots offline.
-* Sprites must be `https` and come from the endpoint's own host or one named
-  in `hosts`. Never plain `http`, except a local dev endpoint pointing at
-  itself.
-* Capped at 24 guests per session. Names are stripped to printable ASCII and
-  are only ever drawn with `fillText` — no manifest value reaches `innerHTML`.
-* Every failure is silent: no endpoint, no network, bad JSON, a dead host, a
-  broken image — you just get the built-in sixteen.
-* Guests are only ever added during a session, never removed, so a mid-session
-  refresh can't shift a fighter out from under itself. Retired guests simply
-  stop being drafted.
-
-Test it without deploying anything:
-
-    node tools/guest-server.js 8777
-    echo "http://localhost:8777/roster.json" > assets/guests-endpoint.txt
-    python3 tools/build.py
+Same as any spanning wallpaper: the default covers two monitors
+(`?screens=3` for three). For engines that drive each display separately, use
+`?screen=left` / `?screen=right` — each instance renders its own slice of the
+same valley, so the scenery lines up across the bezel.
+
+In Lively: **+** → drag the file in → choose Web page. Set *Wallpaper input*
+to Desktop so the hotkeys reach it. For the screensaver, Lively's one-time
+`.scr` setup applies (Library → Active Wallpapers → Screensaver).
+
+The Windows lock screen only takes a still image — pre-rendered stills are in
+`lockscreen/`, or render your own with `node tools/export.js 3440x1440`.
+
+## The world is rolled, not scripted
+
+Each machine rolls a **world seed** on first run and keeps it: where the
+gorge sits, which side the rainforest holds, how dense the village is, every
+tree and hut placement. `?seed=7` reproduces a specific valley — pass the
+same seed to both instances if you run per-monitor mode, so the halves match.
+
+Behaviour is procedural too. Every fighter appearance rolls a personality —
+aggression, mischief, sociability, courage, showmanship — and what happens
+when two meet is **scored, not scripted**: the same pair might duel, spar as
+friends, wrestle, greet each other with a hop, play piggyback, gang up, give
+chase, or one may simply flee a much stronger opponent. Fight cadence itself
+comes from the personalities in it.
+
+## What happens down there
+
+* **Four fighters** at a time from a roster of thirty drawn characters,
+  plus live guests. Casting is a shuffled bag, so no two on screen repeat.
+  The cast includes a hero wing: STARDUST and BLACK TERROR are real
+  public-domain golden-age heroes (Fox Features and Nedor, 1940s — the
+  originals belong to everyone now), joined by originals on modern
+  super-archetypes — FORGE-1 the armoured inventor (jets over traffic,
+  golden repulsor strikes), RAMPAGE the gamma brute, STORMHAMMER the storm
+  god (lightning strikes), and ARACHNE the spider acrobat (blinks past).
+  There are no open-source Marvel characters — Marvel is Disney IP — which
+  is exactly why the public-domain forties heroes are here instead.
+* **Guests** arrive through the portal: the pentagon flares, a beam opens —
+  golden by day, silver by night — and they drop out of the sky. Default
+  source is `mix` (RoboHash robots + PokéAPI creatures); `?guests=off` for
+  a fully offline wallpaper. Sprites are trimmed and scaled so everyone
+  stands the same height.
+* **Encounters**: duels, wrestling, piggybacks, two-on-one gang-ups, and the
+  outnumbered fighter's ultimate. Losers topple and leave a headstone or
+  cross for 30 seconds. Everyone fighting wears a nameplate.
+* **Monster raids**: every minute or two, skeletons, kobolds, bugbears,
+  ghouls or ogres crawl out of the forest — occasionally led by a **boss**,
+  half again as big with three times the hp. Every hero on screen drops what
+  they are doing, converges, and they cut the raiders down together. Kills
+  share experience with everyone who joined the hunt; monsters burst rather
+  than leaving graves. `?raids=0` for peace.
+* **Progression**: wins earn levels — cape, better weapon, evolution with
+  wings at 3, plates and shield, bulk, and a crowned final form at 6 that
+  stays on the field and is befriended or avoided. Press **L** for the
+  standings; progress survives reloads.
+* **Passing moves**: vault, wing-glide, jetpack, or blink past oncoming
+  traffic. Heroes with a signature exit prefer it.
+* **Creature balls**: creatures from the portal sometimes land still packed
+  in a capture ball that sits glinting in the grass. A passing fighter picks
+  it up and hurls it at someone — bowling them over — and the creature bursts
+  out on impact. Creatures fight raiders with typed elemental attacks judged
+  from their own colours (embers, water, leaves, sparks, psychic motes), and
+  a killing blow **evolves** them: their real next form is looked up live and
+  the sprite swaps mid-scene (Pikachu comes back as Raichu), with a
+  growth-only evolution as the offline fallback.
+* **Flyovers**: an eagle, a dragon, or a giant insect occasionally crosses
+  the sky and drops a treasure chest. Whoever reaches it first opens it —
+  an XP cache, a swiftness draught, or a giant's elixir that works exactly
+  like it sounds.
 
 ## Settings
 
-Press **H** over the wallpaper for the settings panel — monitors, fighter
-size, taskbar height, crowd, frame cap, the guest source, and toggles for
-duels, levels, the portal, the day cycle, logo and scanlines, plus a
-**Reset progress** button that clears every fighter's record. Changes save to
-`localStorage`, and **Copy URL** gives you a link with the same settings
-baked in, which is what a wallpaper engine wants.
-
-Press **L** for the arena standings — the top eight fighters by experience,
-each with their level, a progress bar to the next one, and FINAL for a
-champion. It updates live while wins come in.
-
-Every setting is also a URL parameter:
+**H** opens the panel; **L** the leaderboard. Everything is a URL parameter
+too — `Copy URL` bakes the current settings into a link:
 
 | Parameter  | Default | Notes |
 |------------|---------|-------|
 | `screens`  | `2`     | Monitors the wallpaper spans (1–6) |
-| `panel`    | `-1`    | `-1` draws the whole span; `0`,`1`,… draw one monitor |
-| `screen`   | –       | Shorthand: `left` = `panel=0`, `right` = `panel=1` |
-| `count`    | `4`     | Fighters on screen at once, across the whole span (1–16) |
-| `scale`    | `2`     | Sprite pixel scale. Fighters are `28 × scale` px tall, so `2` ≈ 56 px |
-| `taskbar`  | `48`    | Height of your taskbar in px — the fighters run on this line |
-| `fps`      | `60`    | Frame cap. Drop to `30` on a laptop |
-| `duels`    | `1`     | Set `0` for a plain parade — no encounters, nobody dies |
-| `levels`   | `1`     | Experience, kit and evolutions. `0` freezes everyone at base |
-| `seedxp`   | `0`     | Preview switch: start every fighter with this much record (`14` = final form) |
-| `portal`   | `1`     | Challengers and guests arrive through the mark. `0` = walk on |
-| `logo`     | `1`     | Set `0` to hide the wordmarks |
-| `logoy`    | `0`     | Logo height as a fraction of the screen; `0` = automatic |
-| `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |
-| `ambient`  | `1`     | The scene keeps office hours — deepest at night, violet at dawn and dusk, a lift of blue through the day. Repainted every ten minutes, not per frame |
-| `grain`    | `1`     | Scanline overlay |
-| `guests`   | `mix`   | Guest source: `mix`, `robohash`, `pokeapi`, `endpoint`, or `off` |
-| `card`     | `0`     | `1` shows the full placemat card instead of the lockup |
-| `still`    | `0`     | Non-zero freezes a composed frame, using the value as its seed |
+| `panel` / `screen` | – | Per-monitor mode: `screen=left/right` or `panel=N` |
+| `count`    | `4`     | Fighters on screen (1–16); raiders are extra |
+| `scale`    | `2`     | Sprite pixel scale (fighters ≈ `28 × scale` px tall) |
+| `taskbar`  | `48`    | Your taskbar height — the ground line sits on it |
+| `fps`      | `60`    | Frame cap |
+| `guests`   | `mix`   | `mix`, `robohash`, `pokeapi`, `endpoint`, `off` |
+| `duels`    | `1`     | `0` = nobody fights at all |
+| `raids`    | `1`     | `0` = no monsters |
+| `levels`   | `1`     | Progression on/off; `seedxp=14` previews final forms |
+| `portal`   | `1`     | `0` = everyone walks in from the edges |
+| `ambient`  | `1`     | Follow the real clock; `hour=22` pins any time of day |
+| `seed`     | auto    | World seed; rolled once per machine, `seed=N` reproduces a valley |
+| `still`    | `0`     | Non-zero renders one composed, deterministic frame |
+| `grain`    | `0`     | Scanline overlay, off by default for the valley |
 | `maxDpr`   | `2`     | Device-pixel-ratio ceiling |
 
-Match `taskbar` to your own bar (Windows 11 ≈ 48, Windows 10 ≈ 40, a hidden
-bar ≈ 0) so the fighters land exactly on its top edge.
+## Guest sources and licensing
 
-## Roster
+`mix` pulls half RoboHash (CC-BY — credit Zikri Kader, Hrvoje Novakovic,
+Julian Peter Arias, David Revoy if you redistribute) and half PokéAPI
+(Nintendo artwork — fine on a personal desktop; think before shipping it
+anywhere public). `endpoint` uses your own hosted roster: put an https URL in
+`assets/guests-endpoint.txt`, rebuild, and serve the manifest documented in
+`assets/guests.example.json`. Test locally with `node tools/guest-server.js`.
+Every failure path is silent — bad network simply means the built-in cast.
 
-**The core sixteen**, who walk on from the edges:
-RONIN-9 · VECTOR-X · SIR AEGIS · LUPUS · URSOK · MALPHAX · NOVA-7 ·
-KESTREL · IRONCLAD · SERAPH · VIPER · GLACIA · EMBER · RAVEN · ZEPHYR ·
-OBSIDIAN
+## Performance
 
-**Eight challengers**, who arrive through the mark:
-KENSHO · LOTUS · TITANOV · RAZORCLAW · TEMPESTA · VISOR · FERRO · NIGHTSTEP
-
-The challengers are built on well-worn archetypes — the gi martial artist, the
-grappler, the clawed feral, the optic-beam ranger, the storm-caller. Archetypes
-are not ownable; specific characters are. None of these is a likeness of
-anyone's character, and none uses anyone else's artwork.
-
-Humanoids, two beasts and a hover drone, each with its own silhouette,
-palette, weapon and gait, drawn as pixel art rather than glowing vectors so
-they stay legible at 56 px tall.
-
-Only four are on screen at a time, and casting draws from a shuffled bag
-rather than at random — so no two on screen are ever the same fighter, and
-all sixteen appear before any of them comes round again.
-
-## How it performs
-
-The previous build re-stroked every limb with `shadowBlur` onto a
-4096×1152 canvas sixty times a second and forced a React re-render on every
-hit. This one:
-
-* paints the background **once** into its own canvas and repaints it only on
-  resize;
-* clears and redraws **only the bottom strip** each frame — roughly an eighth
-  of the desktop;
-* bakes every fighter, frame and facing into offscreen sprite sheets at
-  startup, so a fighter costs one `drawImage` per frame with no filters;
-* renders the logos as DOM/SVG, so they stay crisp at any DPI and cost
-  nothing per frame;
-* pauses entirely when the page is hidden.
-
-Measured in Chromium: a steady 60 fps even at 28 fighters across a 5760×1080
-triple-monitor span, flat at 9.5 MB heap over a 90-second soak. At the
-default four fighters it is far below that.
+The valley is painted once per resize (and re-tinted every ten minutes as the
+light changes); only the animation strip redraws per frame; every fighter is
+one `drawImage` from a pre-baked sheet. The three.js portal renders a small
+transparent canvas at 30fps, measures its own cost, and drops to a lazy
+twice-a-second spin on machines without GPU acceleration. The page pauses
+when hidden.
 
 ## Editing
 
-`Bluerydge_Arena_Wallpaper.html` is generated. Edit `src/app.js` or
-`src/wallpaper.template.html`, then:
+`Portal_Valley_Wallpaper.html` is generated — edit `src/` and run:
 
     python3 tools/build.py
 
-See `tools/README.md` for the sprite contact-sheet helper.
+`tools/preview.js` screenshots it headlessly; `tools/spritesheet.js` renders
+the fighter contact sheet (`?debug=1`); `tools/export.js` renders lock-screen
+stills.
