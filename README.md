@@ -186,14 +186,23 @@ Set `?duels=0` if you would rather nobody fought at all.
 
 ## Guest fighters
 
-The wallpaper can draft extra fighters from a live source. **It does nothing
-unless you ask it to** — the default makes no network request of any kind,
-which is verified in the checks.
+The wallpaper drafts extra fighters from live sources, and they arrive
+through the mark. **The default is `mix`** — half endless procedural robots
+(RoboHash), half creature sprites (PokéAPI, ~1,000 ids) — so new faces keep
+coming out of the portal. If either source is down the other still delivers,
+and if both are unreachable you simply get the built-in cast: every failure
+is silent.
 
+    ?guests=mix         robots + creatures (default)
     ?guests=robohash    endless procedurally generated robots and monsters
-    ?guests=pokeapi     ~490 creature sprites
-    ?guests=endpoint    your own roster (default; inert until configured)
+    ?guests=pokeapi     ~1,000 creature sprites
+    ?guests=endpoint    your own hosted roster
     ?guests=off         never touch the network
+
+**`?guests=off` is the no-network switch.** With it set (or with `endpoint`
+and no endpoint configured) the file makes zero requests, which is verified
+in the checks. Note the licensing section below before shipping the default
+anywhere public-facing.
 
 ### Which sources actually work
 
@@ -321,7 +330,7 @@ Every setting is also a URL parameter:
 | `logoy`    | `0`     | Logo height as a fraction of the screen; `0` = automatic |
 | `drift`    | `0`     | Slowly creep the logo around — OLED burn-in insurance |
 | `grain`    | `1`     | Scanline overlay |
-| `guests`   | `endpoint` | Guest source: `endpoint`, `robohash`, `pokeapi`, or `off` |
+| `guests`   | `mix`   | Guest source: `mix`, `robohash`, `pokeapi`, `endpoint`, or `off` |
 | `card`     | `0`     | `1` shows the full placemat card instead of the lockup |
 | `still`    | `0`     | Non-zero freezes a composed frame, using the value as its seed |
 | `maxDpr`   | `2`     | Device-pixel-ratio ceiling |

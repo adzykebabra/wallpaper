@@ -197,7 +197,7 @@ var DEFAULTS = {
   seedxp: 0,      // preview switch: start every fighter with this much record
   grain: 1,
   maxDpr: 2,
-  guests: 'endpoint',   // 'endpoint' | 'robohash' | 'pokeapi' | 'off'
+  guests: 'mix',        // 'mix' | 'robohash' | 'pokeapi' | 'endpoint' | 'off'
   still: 0,       // >0 freezes a composed frame, using this value as the seed
   logoy: 0,       // logo height as a fraction of the screen; 0 = automatic
   drift: 0        // slowly drift the logo — OLED burn-in insurance
@@ -220,7 +220,8 @@ var SOURCES = {
   off:      { hosts: [] },
   endpoint: { hosts: [] },
   robohash: { hosts: ['robohash.org'] },
-  pokeapi:  { hosts: ['pokeapi.co', 'raw.githubusercontent.com'] }
+  pokeapi:  { hosts: ['pokeapi.co', 'raw.githubusercontent.com'] },
+  mix:      { hosts: ['robohash.org', 'pokeapi.co', 'raw.githubusercontent.com'] }
 };
 
 var cfg = (function () {
@@ -259,9 +260,9 @@ function clampCfg(c) {
   c.seedxp = Math.round(c.seedxp);
   if (c.panel >= c.screens) c.panel = -1;
   c.guests = String(c.guests);
-  if (c.guests === '1' || c.guests === 'true') c.guests = 'endpoint';
+  if (c.guests === '1' || c.guests === 'true') c.guests = 'mix';
   if (c.guests === '0' || c.guests === 'false') c.guests = 'off';
-  if (!SOURCES[c.guests]) c.guests = 'endpoint';
+  if (!SOURCES[c.guests]) c.guests = 'mix';
   return c;
 }
 
@@ -2913,6 +2914,16 @@ function fetchRoster() {
   var want = Math.min(GUEST_MAX, Math.max(4, cfg.count * 2));
   if (cfg.guests === 'robohash') return robohashRoster(want);
   if (cfg.guests === 'pokeapi') return pokeapiRoster(want);
+  if (cfg.guests === 'mix') {
+    /* half and half; if one source is down the other still delivers */
+    var ha = Math.max(2, want >> 1);
+    return Promise.all([
+      robohashRoster(ha).catch(function () { return { characters: [] }; }),
+      pokeapiRoster(ha).catch(function () { return { characters: [] }; })
+    ]).then(function (rs) {
+      return { characters: rs[0].characters.concat(rs[1].characters) };
+    });
+  }
   return fetch(GUEST_ENDPOINT, { cache: 'no-cache', credentials: 'omit', mode: 'cors' })
     .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error(r.status)); });
 }
