@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Bluerydge Arena — Wallpaper</title>
+<style>
+@font-face{font-family:'Press Start 2P';font-style:normal;font-weight:400;font-display:block;
+  src:url(data:font/woff2;base64,__FONT_PRESSSTART__) format('woff2')}
+@font-face{font-family:'Rajdhani';font-style:normal;font-weight:700;font-display:block;
+  src:url(data:font/woff2;base64,__FONT_RAJDHANI__) format('woff2')}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#020409}
+body{cursor:default}
+body.idle{cursor:none}
+
+/* ── layer stack ───────────────────────────────────────────────
+   0 scene  static painted background (repainted only on resize)
+   1 marks  Bluerydge logo, one per monitor panel
+   2 grade  vignette + scanlines
+   3 fx     animated canvas, bottom strip only
+   9 panel  settings UI                                          */
+#scene,#fx{position:fixed;display:block;image-rendering:pixelated}
+#scene{left:0;top:0;z-index:0}
+#fx{left:0;z-index:3;pointer-events:none}
+
+#marks{position:fixed;inset:0;z-index:1;pointer-events:none}
+.mark{position:absolute;display:flex;flex-direction:column;align-items:center;
+  transform:translate(-50%,-50%);animation:breathe 7s ease-in-out infinite}
+.mark .hexwrap{position:relative;display:block;filter:drop-shadow(0 0 18px rgba(0,170,255,.45))}
+.mark .word{font-family:Rajdhani,'Segoe UI',sans-serif;font-weight:700;color:#eaf7ff;
+  white-space:nowrap;line-height:1;text-shadow:0 0 22px rgba(0,190,255,.55),0 0 60px rgba(0,120,255,.3)}
+.mark .rule{height:1px;background:linear-gradient(90deg,transparent,rgba(0,210,255,.75),transparent)}
+.mark .sub{font-family:'Press Start 2P',monospace;color:#5fd0ff;opacity:.62;white-space:nowrap;
+  text-shadow:0 0 14px rgba(0,190,255,.5)}
+@keyframes breathe{0%,100%{opacity:.94}50%{opacity:.72}}
+
+#grade{position:fixed;inset:0;z-index:2;pointer-events:none;
+  background:
+    repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0 1px,transparent 1px 3px),
+    radial-gradient(ellipse 62% 68% at 50% 42%,transparent 52%,rgba(0,3,10,.72) 100%)}
+#grade.nogr{background:radial-gradient(ellipse 62% 68% at 50% 42%,transparent 52%,rgba(0,3,10,.72) 100%)}
+
+/* ── settings panel (press H) ─────────────────────────────── */
+#panel{position:fixed;right:16px;top:16px;z-index:9;width:280px;display:none;
+  font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:#cfe9ff;
+  background:rgba(6,14,28,.93);border:1px solid rgba(0,170,255,.35);border-radius:10px;
+  padding:14px 16px;backdrop-filter:blur(6px);box-shadow:0 12px 40px rgba(0,0,0,.6)}
+#panel.on{display:block}
+#panel h2{font:400 10px/1.6 'Press Start 2P',monospace;color:#5fd0ff;margin-bottom:12px;letter-spacing:1px}
+#panel label{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:8px 0}
+#panel label span:first-child{opacity:.75}
+#panel output{min-width:44px;text-align:right;color:#7fe3ff}
+#panel input[type=range]{flex:1;accent-color:#00b4ff;min-width:0}
+#panel input[type=checkbox]{accent-color:#00b4ff}
+#panel .row{display:flex;gap:8px;margin-top:12px}
+#panel button{flex:1;font:inherit;color:#cfe9ff;background:rgba(0,140,255,.16);cursor:pointer;
+  border:1px solid rgba(0,170,255,.4);border-radius:6px;padding:6px 8px}
+#panel button:hover{background:rgba(0,140,255,.3)}
+#panel .hint{margin-top:10px;font-size:11px;opacity:.5;line-height:1.5}
+#boot{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+  background:#020409;font:400 11px/1.6 'Press Start 2P',monospace;color:#3d7fa8;
+  transition:opacity .45s ease}
+#boot.gone{opacity:0;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="marks"></div>
+<div id="grade"></div>
+<canvas id="fx"></canvas>
+<div id="boot">BLUERYDGE ARENA</div>
+
+<div id="panel">
+  <h2>ARENA SETUP</h2>
+  <label><span>Monitors</span><input id="p-screens" type="range" min="1" max="4" step="1"><output id="o-screens"></output></label>
+  <label><span>Fighter size</span><input id="p-scale" type="range" min="1" max="5" step="1"><output id="o-scale"></output></label>
+  <label><span>Taskbar (px)</span><input id="p-taskbar" type="range" min="0" max="140" step="2"><output id="o-taskbar"></output></label>
+  <label><span>Crowd</span><input id="p-density" type="range" min="0.3" max="2.5" step="0.1"><output id="o-density"></output></label>
+  <label><span>Max FPS</span><input id="p-fps" type="range" min="15" max="60" step="5"><output id="o-fps"></output></label>
+  <label><span>Duels</span><input id="p-duels" type="checkbox"></label>
+  <label><span>Logo</span><input id="p-logo" type="checkbox"></label>
+  <label><span>Scanlines</span><input id="p-grain" type="checkbox"></label>
+  <div class="row"><button id="p-copy">Copy URL</button><button id="p-reset">Reset</button></div>
+  <div class="hint">H toggles this panel. Settings are saved locally and encoded in the URL.</div>
+</div>
+
+<script>
+__APP_JS__
+</script>
+</body>
+</html>
